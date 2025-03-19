@@ -16,6 +16,7 @@ library(rpart)
 library(rpart.plot)
 library(caret)
 library(randomForest)
+library(xgboost)
 ```
 
 ```{r import}
@@ -133,7 +134,6 @@ Evaluation: Once again, a confusion matrix can be produced to view predicted val
 Experiment:
 
 ```{r dt2-mod}
-bank_sub <- bank |> select(!duration)
 bank_sub_train <- bank_train |> select(!duration)
 bank_sub_test <- bank_test |> select(!duration)
 
@@ -264,7 +264,7 @@ rf2_test_accuracy <- rf2_test_cm$overall["Accuracy"]
 rf2_test_accuracy
 ```
 
-Review: The accuracy on the training data dropped to 0.86. This loss of accuracy does bring the metric much closer to the accuracy on the testing set, signalling less overfitting though. 
+Review: The accuracy on the training data dropped to 0.86. This loss of accuracy does bring the metric much closer to the accuracy on the testing set, signalling less overfitting though. Overall, the random forest algorithm may not be the best choice for this data set.
 
 ```{r rf2-log}
 rf2_log <- data.frame(
@@ -281,25 +281,75 @@ experiment_log <- bind_rows(experiment_log, rf2_log)
 ```
 
 
-## Adaboost or XGBoost
+## XGBoost
 
 #### Experiment 5:
 
-- Define the objective of the experiment / hypothesis / what you are trying to achieve (before each run)
-- Decide what will change, and what will stay the same
-      # Variations
-      Vary between experiments (examples):
-      Data sampling / feature selection
-      Data augmentation e.g., regularization, normalization, scaling
-      Hyperparameter optimization (you decide, random search, grid search, etc.) 
-       - Decision Tree breadth & depth (this is an example of a hyperparameter)
-      Evaluation metrics e.g., Accuracy, precision, recall, F1-score, AUC-ROC
-      Cross-validation strategy e.g., holdout, k-fold, leave-one-out
-      Number of trees (for ensemble models) 
-      Train-test split: Using different data splits to assess model generalization ability
-- Select the evaluation metric (what you want to measure)
-- Perform the experiment
-- Review how your experiment went and document the experiment so you compare results (track progress)
+Objective: For the 
+
+Variations:
+      
+Evaluation: We will continue to use a confusion matrix for accuracy
+
+Experiment:
+
+```{r xg1-mod}
+# convert the target column from factor to numeric label
+bank_train2 <- bank_train
+bank_train2$y <- as.numeric(bank_train2$y)
+bank_test2 <- bank_test
+bank_test2$y <- as.numeric(bank_test2$y)
+
+bank_var_train <- dummyVars(" ~ .", data = bank_train2[c(-17)])
+bank_var_train <- data.frame(predict(bank_var_train, newdata = bank_train2))
+bank_var_test <- dummyVars(" ~ .", data = bank_test2[c(-17)])
+bank_var_test <- data.frame(predict(bank_var_test, newdata = bank_test2))
+
+# convert the data to a matrix, leaving out the final column
+train_matrix <- xgb.DMatrix(data = as.matrix(bank_var_train), label = bank_train2$y)
+test_matrix  <- xgb.DMatrix(data = as.matrix(bank_var_test), label = bank_test2$y)
+
+bank_xg1 <- xgboost(data = train_matrix,
+                    objective = "binary:logistic",
+                    nrounds = 100,
+                    verbose = 0)
+
+importance_matrix <- xgb.importance(model = bank_xg1)
+importance_matrix
+xgb.plot.importance(importance_matrix)
+```
+
+```{r xg1-eval}
+# predict and evaluate on training data
+xg1_train_pred <- predict(bank_xg1, train_matrix)
+xg1_train_pred <- factor(xg1_train_pred, levels = 0:1, labels = levels(bank$y))
+
+xg1_train_cm <- confusionMatrix(xg1_train_pred, factor(bank_train2$y, levels = 0:1))
+xg1_train_cm
+```
+# predict and evaluate on testing data
+xg1_test_pred <- predict(bank_xg1, test_matrix, type = "class")
+xg1_test_cm <- confusionMatrix(xg1_test_pred, test_trsf$y.no)
+xg1_test_accuracy <- xg1_test_cm$overall["Accuracy"]
+xg1_test_accuracy
+```
+
+Review: The accuracy on the testing data is much lower than on the training set, which indicates overfitting. The black line on the plot represents the OOB (out-of-bag) error rate; as the number of trees increases, the error rate stabilizes early enough to imply that the number of trees may have been set too high.
+
+```{r rf1-log}
+rf1_log <- data.frame(
+  Experiment_ID = 3,
+  Model_Type = "Random Forest",
+  Features_Used = "all",
+  Hyperparameters = "impute method, number of trees",
+  Train_Accuracy = 1.00,
+  Test_Accuracy = 0.85,
+  Notes = "overfitting"
+)
+
+experiment_log <- bind_rows(experiment_log, rf1_log)
+```
+
 
 #### Experiment 6:
 
