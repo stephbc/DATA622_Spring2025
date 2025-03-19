@@ -1,0 +1,132 @@
+---
+title: "EDA & Alogrithm Selection"
+author: "Stephanie Chiang"
+date: "Spring 2025"
+output:
+  html_document:
+    df_print: paged
+subtitle: DATA 622 Assignment 1
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# The Data
+
+The full bank marketing dataset was downloaded [here](https://archive.ics.uci.edu/dataset/222/bank+marketing) and then imported using `read.csv2()` to use the correct delimiter and separator per the origin country.
+
+```{r import}
+bank_raw <- read.csv2(file="bank+marketing/bank/bank-full.csv")
+
+head(bank_raw)
+```
+
+# Exploratory Data Analysis (EDA)
+
+### The Variables
+
+There are features relating to the customers themselves (age, job, marital, education) and also relating to their banking history (default, balance, housing, loan). The remaining are columns for marketing history. There are many columns with possible correlations, especially in the customers' personal data and banking history. For example, it would be reasonable to assume a relationship between `housing` (having a housing loan), `loan` (having a personal loan) and `default` (having credit in default) because a customer would have to have a loan in order to default on it.
+
+An ANOVA test can be used quantify the relationship of some of the variables. For example, the p-value of whether a customer has credit in default and their bank balance is very small and so their relationship can be interpreted having statistical significance.
+
+```{r aov}
+bank <- bank_raw
+
+aov_m <- aov(balance ~ default, data = bank)
+summary(aov_m)
+```
+
+### Distributions
+
+Simple plots of some of the distributions of the customer data can be seen below. There are peaks for `age` (around 30 with a sharp drop around 60), `marital` status (married) and `education` (secondary). Notably, the one column with huge disparity and extreme outliers is average yearly `balance`. This plot had to scaled at log 10 because of a handful of observations with nearly double the next highest value, though the vast majority hovered near 0.
+
+```{r cus}
+ggplot(bank, aes(x = age)) + 
+  geom_bar()
+
+ggplot(bank, aes(x = marital)) + 
+  geom_bar()
+
+ggplot(bank, aes(x = education)) + 
+  geom_bar()
+
+ggplot(bank, aes(x = balance)) + 
+  geom_bar() +
+  scale_y_log10()
+```
+
+The binary categorical variables for banking info are shown below. Here there is clear majority for no personal loans and no default, with a close to even split in the data population for having housing loans.
+
+```{r bar}
+ggplot(bank, aes(x = default)) +
+  geom_bar()
+
+ggplot(bank, aes(x = loan)) +
+  geom_bar()
+
+ggplot(bank, aes(x = housing)) +
+  geom_bar()
+```
+
+For the marketing columns, the simple distributions for `previous` (the number of contacts before this campaign), `poutcome` (the outcome of that previous campaign), `campaign` (the number of contact for this campaign) and `y` the outcome variable (whether the customer has subscribed).
+
+Again, we can see some peaks and outliers in the data. Notably, one customer recorded 275 contacts in the previous campaign (an error perhaps?) that skews the entire chart. Also the vast majority of results from the previous campaign are recorded as 'unknown', which could make it difficult to make accurate predictions. Finally, most customers are listed as not subscribed to a term deposit.
+
+```{r mark}
+ggplot(bank, aes(x = previous)) +
+  geom_bar()
+
+ggplot(bank, aes(x = poutcome)) +
+  geom_bar()
+
+ggplot(bank, aes(x = y)) +
+  geom_bar()
+```
+
+There appear to be no missing values, though the 'unknown' in `poutcome` could be coded as such later on.
+
+```{r nas}
+nas <- bank |> summarize(across(everything(), ~ sum(is.na(.) | is.nan(.) | is.infinite(.))))
+nas
+```
+
+
+# Algorithms
+
+Since the data in this set is mostly categorical and the `y` outcome variable will be a binary yes/no response, for this classification, I would choose either logistic regression or naive Bayes. Both types of algorithms are simple and efficient ways to predict class membership. Also, both models can handle this particular dataset well because even though the sample size is pretty large to begin with, the predictor variable from the previous campaign `poutcome` has a majority of unknowns, which could reduce the usable data significantly.
+
+The predictions would be interpreted in this way: is there a high enough probability that this customer can be labeled as a 'yes', as in, a good candidate / likely subscriber, for the term deposit product?
+
+### Logistic Regression
+
+Logistic regression outputs coefficients representing how the chosen features impact the outcome and the probability of the target response, which would allow the bank to not just select the best customers to pursue (and thereby limiting resource-use) but also rank the pool by that probability. Also, some of the features here are multicollinear so being able to consider the significance of each variable would be valuable, as would the ability to handle extreme outliers in certain categories like `balance`.
+
+### Naive Bayes
+
+Since this is a large dataset with a fair number of both binary and multinomial categorical features (though not all may be considered relevant or necessary to use in prediction), naive Bayes could be an appropriate choice too. The major assumptions of this type of algorithm are the independence of the features when conditioned on the same class value and their equal importance to the result. Even though the features showed plausible correlations, the assumptions could be worth making because there are so many predictors to choose from, and naive Bayes scales to high dimensionality efficiently and tends to be effective despite these assumptions.
+
+Unfortunately, this algorithm would be unable to quantify how much each variable contributes, possibly reducing the accuracy. The few numeric features (age, balance) would also have to be binned first in order to be considered.
+
+
+# Pre-processing
+
+To proceed with either algorithm, we would first have to handle the large number unknowns in the `poutcome` column. These could be converted to `na`s and dropped, or a separate sample of only confirmed outcomes could be created. 
+
+Features like `month` and `day` can be removed, since `pdays` already represents the number of days since last contact. This variable could also be used to generate a new column indicating true/false for if the customer was previously contacted at all (given as a -1 value currently) allowing for grouping new potential customers away from prior successes/failures.
+
+For numerical data like `age` and `balance`, it would be beneficial to bin them into ranges. This would clarify and group the instances more efficiently for processing, handle the extreme outliers in the `balance` column and normalize the distributions of each.
+
+And finally for features like `marital` with clear majority for 'married', this class imbalance could be addressed by transforming the `single` and `divorced` labels into a `married` column with a true/false indicator instead.
+
+# Summary
+
+Based on the structure of this dataset and the business goal of customer behavior prediction, I would choose logistic regression for this banking dataset over Naïve Bayes. Logistic regression is the better algorithm to apply in this situation to analyze and predict customer behavior based on multiple correlated features. The ability of logistic regression to model relationships between variables without assuming independence makes it particularly useful for this dataset, where we expect significant interactions between different customer attributes.
+Naïve Bayes' assumption of feature independence would be inapplicable here. Too many of the features in this dataset demonstrate plausible correlations, which could affect the accuracy of the probabilities and the reliability of classification. By treating all the variables as independent, Naïve Bayes may struggle with these multiple related features, leading to redundant influence from correlated predictors and reduced accuracy. For example, customer age and income level are often correlated, and treating them as independent could distort classification probabilities. Furthermore, Naïve Bayes cannot provide coefficients, so we would miss out on these valuable insights for specific predictors. If this dataset were smaller, with fewer than 1,000 records, Naïve Bayes could be a better choice as it handles this limitation better than logistic regression. However, since we are dealing with a larger structured dataset, logistic regression is the preferred approach.
+
+The biggest advantage of logistic regression, in contrast, is its interpretability. This model gives coefficients for each predictor, quantifying their influence on the outcome, allowing for better understanding of how different factors contribute to the final prediction. This is particularly important in this hypothetical business setting where stakeholders need clear explanations for why certain customers are classified as more likely to subscribe to term deposit products. Logistic regression allows for hypothesis testing and feature importance analysis, providing direct insights into which variables most impact customer behavior.
+Another key advantage of logistic regression is its scalability. We are working with a structured dataset that contains both numerical and multinomial categorical variables, which logistic regression can efficiently process. Also, since we have a finite number of variables rather than an extremely high-dimensional dataset, logistic regression is computationally efficient while maintaining strong predictive performance.
+
+To answer the specific question, "Which type of customer profile should we aim to sell term deposit subscriptions to?", logistic regression would most fit our needs, given the structure of this sample banking data. The ability to generate probability scores allows for flexible decision-making, such as targeting customers with a predicted likelihood above a certain threshold. This would enable any users of the final predictions to focus on high-probability customers, optimizing resource allocation and improving overall success rates. The ability to integrate feature importance analysis ensures that the business can refine its strategy based on the results of our insights, ultimately making logistic regression the ideal choice for this particular predictive modeling task.
+
