@@ -8,7 +8,7 @@ output: pdf_document
 
 # Introduction
 
-Continuing from the previous data exploration of banking and marketing information, I will be testing and comparing decision trees, random forests and AdaBoos/XGBoost to determine the optimal model for predicting `y`.
+Continuing from the previous data exploration of banking and marketing information, I will be testing and comparing decision trees, random forests and XGBoost to determine which is the optimal model for predicting `y`.
 
 ```{r lib, message=FALSE, warning=FALSE}
 library(tidyverse)
@@ -21,12 +21,11 @@ library(xgboost)
 
 ```{r import}
 bank_raw <- read.csv2(file="bank+marketing/bank/bank-full.csv")
-
 bank <- bank_raw 
 glimpse(bank)
 ```
 
-The data will need preprocessing in the following ways: the "unknown" and "other" values in `poutcome` were converted to `NA`s for elucidation of the previous campaign's results. The columns containing strings were converted to factors.
+The data will be preprocessed in the following ways: the "unknown" and "other" values in `poutcome` converted to `NA`s for elucidation of the previous campaign's results; the columns containing strings converted to factors.
 
 ```{r preprocess}
 bank <- bank |>
@@ -42,7 +41,7 @@ head(bank)
 
 # Experiment 
 
-The data must first be split for training and testing.
+The data must first be partitioned for training and testing, at a standard 80-20.
 
 ```{r split}
 set.seed(123)
@@ -85,9 +84,8 @@ Evaluation: A confusion matrix can be produced to view predicted values against 
 Experiment:
 
 ```{r dt1-mod}
-bank_dt1 <- rpart(y~.,
-                  method = "class",
-                  data = bank_train)
+set.seed(123)
+bank_dt1 <- rpart(y ~ ., method = "class", data = bank_train)
 
 rpart.plot(bank_dt1)
 ```
@@ -96,17 +94,15 @@ rpart.plot(bank_dt1)
 # predict and evaluate on training data
 dt1_train_pred <- predict(bank_dt1, bank_train, type = "class")
 dt1_train_cm <- confusionMatrix(dt1_train_pred, bank_train$y)
-dt1_train_accuracy <- dt1_train_cm$overall["Accuracy"]
-dt1_train_accuracy
+dt1_train_cm$overall["Accuracy"]
 
 # predict and evaluate on testing data
 dt1_test_pred <- predict(bank_dt1, bank_test, type = "class")
 dt1_test_cm <- confusionMatrix(dt1_test_pred, bank_test$y)
-dt1_test_accuracy <- dt1_test_cm$overall["Accuracy"]
-dt1_test_accuracy
+dt1_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy of this first model is high, at just over 90%, and the feature determined to be most predictive of `y` is `duration`. If the last contact with the customer was recorded at under 522 seconds, the probability that the customer has not subscribed to a term deposit is only 8%. Interestingly, the decision tree only chose features related to marketing as most predictive: `duration`, `poutcome` and `pdays`.
+Review: The accuracy of this first model is fairly high, at just over 90%, and the feature determined to be most predictive of `y` is `duration`. If the last contact with the customer was recorded at under 522 seconds, the probability that the customer has not subscribed to a term deposit is only 8%. Interestingly, the decision tree only determined features related to marketing as most predictive: `duration`, `poutcome` and `pdays`.
 
 ```{r dt1-log}
 dt1_log <- data.frame(
@@ -125,21 +121,21 @@ experiment_log <- bind_rows(experiment_log, dt1_log)
 
 #### Experiment 2:
 
-Objective: To see if different features will be selected for their predictive power once the data is changed. 
+Objective: To see if a different set features will be selected for predictive power once the data is altered 
 
-Variations: The feature selection will be adjusted; the `duration` column will be dropped.
+Variations: Feature selection will be adjusted; the `duration` column will be dropped.
       
-Evaluation: Once again, a confusion matrix can be produced to view predicted values against the actual values, then used to calculate the predictive accuracy.
+Evaluation: For consistency, we will use the accuracy measure from the confusion matrix.
 
 Experiment:
 
 ```{r dt2-mod}
+set.seed(123)
+
 bank_sub_train <- bank_train |> select(!duration)
 bank_sub_test <- bank_test |> select(!duration)
 
-bank_dt2 <- rpart(y~.,
-                  method = "class",
-                  data = bank_sub_train)
+bank_dt2 <- rpart(y ~ ., method = "class", data = bank_sub_train)
 
 rpart.plot(bank_dt2)
 ```
@@ -148,17 +144,15 @@ rpart.plot(bank_dt2)
 # predict and evaluate on training data
 dt2_train_pred <- predict(bank_dt2, bank_sub_train, type = "class")
 dt2_train_cm <- confusionMatrix(dt2_train_pred, bank_sub_train$y)
-dt2_train_accuracy <- dt2_train_cm$overall["Accuracy"]
-dt2_train_accuracy
+dt2_train_cm$overall["Accuracy"]
 
 # predict and evaluate on testing data
 dt2_test_pred <- predict(bank_dt2, bank_sub_test, type = "class")
 dt2_test_cm <- confusionMatrix(dt2_test_pred, bank_sub_test$y)
-dt2_test_accuracy <- dt2_test_cm$overall["Accuracy"]
-dt2_test_accuracy
+dt2_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy is slightly lower but still quite high, and this tree appears similar to the first experiment, indicating low variance. Also, since the difference between the accuracy measures is quite small, there does not appear to be any overfitting. However, only marketing-related features were once again chosen by the model, which may not be very helpful for business decision-making, like customer selection.
+Review: The accuracy barely changed and this tree appears similar to the first experiment, indicating low variance overall. Also, since the difference between the training and testing accuracy is so small, the models do not appear to have overfit the data. However, only marketing-related features were again chosen by the model, which may ultimately be of limited use for business decision-making (eg customer selection).
 
 ```{r dt2-log}
 dt2_log <- data.frame(
@@ -168,7 +162,7 @@ dt2_log <- data.frame(
   Hyperparameters = "none",
   Train_Accuracy = 0.89,
   Test_Accuracy = 0.89,
-  Notes = "dropped duration"
+  Notes = "dropped duration, minimal changes"
 )
 
 experiment_log <- bind_rows(experiment_log, dt2_log)
@@ -179,46 +173,46 @@ experiment_log <- bind_rows(experiment_log, dt2_log)
 
 #### Experiment 3:
 
-Objective: This time, by using the bagging method of random forest, the model will select different features at random, giving predictions on a different selection of the data. 
+Objective: By switching to the random forest bagging method, the algorithm will select different features at random, and will instead predict on different dimensions of the data.
 
 Variations:
   1. Imputation: Random forests require handling of `NA` values and `na.roughfix()` can be used as a starting point. Per the [documentation](https://rdrr.io/rforge/randomForest/man/na.roughfix.html), this method of imputation replaces the missing data accordingly: "For numeric variables, NAs are replaced with column medians. For factor variables, NAs are replaced with the most frequent levels (breaking ties at random). If object contains no NAs, it is returned unaltered."
   2. Number of trees: `ntree` is set to 100.
       
-Evaluation: We may continue to use a confusion matrix for accuracy, as well as a plot to visualize error rate.
+Evaluation: We will continue to use a confusion matrix, as well as the importance ranking of the features.
 
 Experiment:
 
 ```{r rf1-mod}
+set.seed(123)
+
 bank_rf1 <- randomForest(y ~ .,
                          data = bank_train,
                          ntree = 100,
                          na.action = na.roughfix)
 
-plot(bank_rf1)
+importance(bank_rf1)
 ```
 
 ```{r rf1-eval}
 # predict and evaluate on training data
 rf1_train_pred <- predict(bank_rf1, bank_train, type = "class")
 rf1_train_cm <- confusionMatrix(rf1_train_pred, bank_train$y)
-rf1_train_accuracy <- rf1_train_cm$overall["Accuracy"]
-rf1_train_accuracy
+rf1_train_cm$overall["Accuracy"]
 
 # predict and evaluate on testing data
 rf1_test_pred <- predict(bank_rf1, bank_test, type = "class")
 rf1_test_cm <- confusionMatrix(rf1_test_pred, bank_test$y)
-rf1_test_accuracy <- rf1_test_cm$overall["Accuracy"]
-rf1_test_accuracy
+rf1_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy on the testing data is much lower than on the training set, which indicates overfitting. The black line on the plot represents the OOB (out-of-bag) error rate; as the number of trees increases, the error rate stabilizes early enough to imply that the number of trees may have been set too high.
+Review: The accuracy on the testing data is much lower than on the training set, which indicates overfitting. Aside from the high importance value for `duration`, the next highest ranked features are `month`, `balance` and `age`.
 
 ```{r rf1-log}
 rf1_log <- data.frame(
   Experiment_ID = 3,
   Model_Type = "Random Forest",
-  Features_Used = "all",
+  Features_Used = "all, with different ranking order from decision trees after 'duration'",
   Hyperparameters = "impute method, number of trees",
   Train_Accuracy = 1.00,
   Test_Accuracy = 0.85,
@@ -235,11 +229,13 @@ Objective: For the second random forest model, hyperparameters will be tuned wit
 
 Variations: The `nodesize` will be raised to a minimum of 5 to prevent smaller leaves. The `mtry` will be reduced to 2 to limit the number of variables being randomly selected at each split. 
       
-Evaluation: The confusion matrix will calculate for accuracy on training and testing sets and the plot of the error rates will again be generated.
+Evaluation: Both the confusion matrix and importance ranking will again be generated.
 
 Experiment:
 
 ```{r rf2-mod}
+set.seed(123)
+
 bank_rf2 <- randomForest(y ~ .,
                          data = bank_train,
                          ntree = 100,
@@ -247,34 +243,32 @@ bank_rf2 <- randomForest(y ~ .,
                          nodesize = 5,
                          na.action = na.roughfix)
 
-plot(bank_rf2)
+importance(bank_rf2)
 ```
 
 ```{r rf2-eval}
 # predict and evaluate on training data
 rf2_train_pred <- predict(bank_rf2, bank_train, type = "class")
 rf2_train_cm <- confusionMatrix(rf2_train_pred, bank_train$y)
-rf2_train_accuracy <- rf2_train_cm$overall["Accuracy"]
-rf2_train_accuracy
+rf2_train_cm$overall["Accuracy"]
 
 # predict and evaluate on testing data
 rf2_test_pred <- predict(bank_rf2, bank_test, type = "class")
 rf2_test_cm <- confusionMatrix(rf2_test_pred, bank_test$y)
-rf2_test_accuracy <- rf2_test_cm$overall["Accuracy"]
-rf2_test_accuracy
+rf2_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy on the training data dropped to 0.86. This loss of accuracy does bring the metric much closer to the accuracy on the testing set, signalling less overfitting though. Overall, the random forest algorithm may not be the best choice for this data set.
+Review: The overfitting of the previous experiment was mitigated, but as expected, lowering the variance came at a cost to accuracy. The order of importance also shifted to more closely match the features the decision tree experiments chose.
 
 ```{r rf2-log}
 rf2_log <- data.frame(
   Experiment_ID = 4,
   Model_Type = "Random Forest",
-  Features_Used = "all",
+  Features_Used = "ranked 'duration', 'month', and 'poutcome'",
   Hyperparameters = "leaf size, number of features randomly sampled",
-  Train_Accuracy = 0.86,
-  Test_Accuracy = 0.83,
-  Notes = "less accurate overall"
+  Train_Accuracy = 0.85,
+  Test_Accuracy = 0.81,
+  Notes = "less accurate, lowered variance"
 )
 
 experiment_log <- bind_rows(experiment_log, rf2_log)
@@ -285,29 +279,32 @@ experiment_log <- bind_rows(experiment_log, rf2_log)
 
 #### Experiment 5:
 
-Objective: For the 
+Objective: The boosting ensemble model XGBoost will be tested to compare accuracy and generate an importance matrix to rank the features' effects on the predictions.
 
-Variations:
+Variations: The data will be augmented via one-hot encoding, converting the string columns to factors with levels.
       
-Evaluation: We will continue to use a confusion matrix for accuracy
+Evaluation: The importance matrix will be plotted visually and the confusion matrix will continue to be utilized.
 
 Experiment:
 
 ```{r xg1-mod}
-# convert the target column from factor to numeric label
+# convert the target column from factor to a numeric label for xgboost,
+# and apply one-hot encoding to the rest of the features
 bank_train2 <- bank_train
-bank_train2$y <- as.numeric(bank_train2$y)
-bank_test2 <- bank_test
-bank_test2$y <- as.numeric(bank_test2$y)
-
+bank_train2$y <- as.numeric(bank_train2$y) - 1
 bank_var_train <- dummyVars(" ~ .", data = bank_train2[c(-17)])
 bank_var_train <- data.frame(predict(bank_var_train, newdata = bank_train2))
+
+bank_test2 <- bank_test
+bank_test2$y <- as.numeric(bank_test2$y) - 1
 bank_var_test <- dummyVars(" ~ .", data = bank_test2[c(-17)])
 bank_var_test <- data.frame(predict(bank_var_test, newdata = bank_test2))
 
-# convert the data to a matrix, leaving out the final column
+# convert the data to a matrix
 train_matrix <- xgb.DMatrix(data = as.matrix(bank_var_train), label = bank_train2$y)
 test_matrix  <- xgb.DMatrix(data = as.matrix(bank_var_test), label = bank_test2$y)
+
+set.seed(123)
 
 bank_xg1 <- xgboost(data = train_matrix,
                     objective = "binary:logistic",
@@ -315,67 +312,132 @@ bank_xg1 <- xgboost(data = train_matrix,
                     verbose = 0)
 
 importance_matrix <- xgb.importance(model = bank_xg1)
-importance_matrix
 xgb.plot.importance(importance_matrix)
 ```
 
 ```{r xg1-eval}
 # predict and evaluate on training data
 xg1_train_pred <- predict(bank_xg1, train_matrix)
-xg1_train_pred <- factor(xg1_train_pred, levels = 0:1, labels = levels(bank$y))
 
-xg1_train_cm <- confusionMatrix(xg1_train_pred, factor(bank_train2$y, levels = 0:1))
-xg1_train_cm
-```
+# convert probabilities back to binary yes/no at threshold = 0.5,
+xg1_train_pred_factor <- ifelse(xg1_train_pred > 0.5, "yes", "no")
+
+# then back to factors for the confusion matrix
+xg1_train_pred_factor <- factor(xg1_train_pred_factor, levels = c("no", "yes"))
+xg1_train_cm <- confusionMatrix(xg1_train_pred_factor, bank_train$y, positive = "yes")
+xg1_train_cm$overall["Accuracy"]
+
 # predict and evaluate on testing data
-xg1_test_pred <- predict(bank_xg1, test_matrix, type = "class")
-xg1_test_cm <- confusionMatrix(xg1_test_pred, test_trsf$y.no)
-xg1_test_accuracy <- xg1_test_cm$overall["Accuracy"]
-xg1_test_accuracy
+xg1_test_pred <- predict(bank_xg1, test_matrix)
+xg1_test_pred_factor <- ifelse(xg1_test_pred > 0.5, "yes", "no")
+xg1_test_pred_factor <- factor(xg1_test_pred_factor, levels = c("no", "yes"))
+xg1_test_cm <- confusionMatrix(xg1_test_pred_factor, bank_test$y, positive = "yes")
+xg1_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy on the testing data is much lower than on the training set, which indicates overfitting. The black line on the plot represents the OOB (out-of-bag) error rate; as the number of trees increases, the error rate stabilizes early enough to imply that the number of trees may have been set too high.
+Review: The accuracy of both testing and training are high. There was a great deal more data wrangling necessary than with the previous algorithms, but the importance matrix allows for feature exploration (and confirms the predictive relationship of `duration` and `y`).
 
-```{r rf1-log}
-rf1_log <- data.frame(
-  Experiment_ID = 3,
-  Model_Type = "Random Forest",
+```{r xg1-log}
+xg1_log <- data.frame(
+  Experiment_ID = 5,
+  Model_Type = "XGBoost",
   Features_Used = "all",
-  Hyperparameters = "impute method, number of trees",
-  Train_Accuracy = 1.00,
-  Test_Accuracy = 0.85,
-  Notes = "overfitting"
+  Hyperparameters = "nrounds = 100, defaults",
+  Train_Accuracy = 0.96,
+  Test_Accuracy = 0.91,
+  Notes = "duration ranked first"
 )
 
-experiment_log <- bind_rows(experiment_log, rf1_log)
+experiment_log <- bind_rows(experiment_log, xg1_log)
 ```
 
 
 #### Experiment 6:
 
-- Define the objective of the experiment / hypothesis / what you are trying to achieve (before each run)
-- Decide what will change, and what will stay the same
-      # Variations
-      Vary between experiments (examples):
-      Data sampling / feature selection
-      Data augmentation e.g., regularization, normalization, scaling
-      Hyperparameter optimization (you decide, random search, grid search, etc.) 
-       - Decision Tree breadth & depth (this is an example of a hyperparameter)
-      Evaluation metrics e.g., Accuracy, precision, recall, F1-score, AUC-ROC
-      Cross-validation strategy e.g., holdout, k-fold, leave-one-out
-      Number of trees (for ensemble models) 
-      Train-test split: Using different data splits to assess model generalization ability
-- Select the evaluation metric (what you want to measure)
-- Perform the experiment
-- Review how your experiment went and document the experiment so you compare results (track progress)
+Objective: Since accuracy is already high, the aim is to use K-fold cross-validation to test whether the model can generalize well and be applied to unseen data.
+
+Variations: XGBoost has a built-in cross-validation function, into which the following will be updated from default:
+- the number of folds, or subsets for training and validation, at 5
+- the `gamma`, a regularization parameter that controls the minimum loss reduction required to make a split and helps prune unnecessary splits in trees, will be changed from 0 to 10 because we have a large dataset with many weak features
+- the `min_child_weight`, another regularization parameter that controls minimum sum of instance weights in a child node, will be changed from 1 to 10, again because the dataset is large enough
+
+Evaluation: The importance and confusion matrices can be compared to the previous experiment.
+
+Experiment:
+
+```{r xg2-cv}
+params2 <- list(
+  objective = "binary:logistic",
+  min_child_weight = 10,
+  gamma = 10
+)
+
+bank_xg2 <- xgb.cv(data = train_matrix,
+                   params = params2,
+                   nrounds = 100,
+                   nfold = 5,
+                   early_stopping_rounds = 10,
+                   verbose = 0)
+
+best_nrounds <- bank_xg2$best_iteration
+best_nrounds
+best_n <- bank_xg2$best_ntreelimit
+best_n
+```
+
+```{r xg2-mod}
+set.seed(123)
+
+bank_xg2 <- xgboost(data = train_matrix,
+                    objective = "binary:logistic",
+                    nrounds = best_nrounds,
+                    verbose = 0)
+
+importance_matrix <- xgb.importance(model = bank_xg1)
+xgb.plot.importance(importance_matrix)
+```
+
+```{r xg2-eval, message=FALSE, warning=FALSE}
+# predict and evaluate on training data
+xg2_train_pred <- predict(bank_xg2, train_matrix, iteration_range = best_n)
+# convert probabilities back to binary yes/no at threshold = 0.5,
+# then back to factors for the confusion matrix
+xg2_train_pred_factor <- ifelse(xg2_train_pred > 0.5, "yes", "no")
+xg2_train_pred_factor <- factor(xg2_train_pred_factor, levels = c("no", "yes"))
+xg2_train_cm <- confusionMatrix(xg2_train_pred_factor, bank_train$y, positive = "yes")
+xg2_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+xg2_test_pred <- predict(bank_xg2, test_matrix, iteration_range = best_n)
+xg2_test_pred_factor <- ifelse(xg2_test_pred > 0.5, "yes", "no")
+xg2_test_pred_factor <- factor(xg2_test_pred_factor, levels = c("no", "yes"))
+xg2_test_cm <- confusionMatrix(xg2_test_pred_factor, bank_test$y, positive = "yes")
+xg2_test_cm$overall["Accuracy"]
+```
+
+Review: The accuracy was once again barely affected, and the importance matrix also did not change. The model should generalize well on future unseen data. The greatest change was that by using cross-validation to determine the best hyperparameters, the number of boosting rounds was halved and so the final model was more efficient while achieving similar predictive accuracy.
+
+```{r xg2-log}
+xg2_log <- data.frame(
+  Experiment_ID = 6,
+  Model_Type = "XGBoost",
+  Features_Used = "all",
+  Hyperparameters = "k-fold cross-validation, gamma, minimum child weight, nrounds = 50",
+  Train_Accuracy = 0.94,
+  Test_Accuracy = 0.91,
+  Notes = "number of boosting rounds reduced by half, similar accuracy"
+)
+
+experiment_log <- bind_rows(experiment_log, xg2_log)
+```
 
 
+# Conclusion
 
+```{r conclusion}
+print(experiment_log)
+```
 
-# Deliverables
-Code: This should include your code, as well as the outputs of your code e.g. correlation chart, saved in https://rpubs.com. Please provide a link to your code in the submission.
-
-Essay (minimum 500 words) Format: PDF
 Write a short essay summarizing your findings. Your essay should include:
 - Explain why you chose the experiments you did
 - Discuss bias & variance across the experiments e.g., between Decision Tree experiments, and with Random Forest & Adaboost
