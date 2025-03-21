@@ -1,9 +1,11 @@
 ---
 title: "Experimentation & Model Training"
-subtitle: "DATA 622 Assignment 1"
-date: Spring 2025
-author: Stephanie Chiang
-output: pdf_document
+author: "Stephanie Chiang"
+date: "Spring 2025"
+output:
+  html_document:
+    df_print: paged
+subtitle: DATA 622 Assignment 1
 ---
 
 # Introduction
@@ -60,12 +62,12 @@ After each experiment, the results will be documented in the following dataframe
 
 ```{r tracking}
 experiment_log <- data.frame(
-  Experiment_ID = integer(),
-  Model_Type = character(),
-  Features_Used = character(),
+  ID = integer(),
+  Model = character(),
+  Features = character(),
   Hyperparameters = character(),
-  Train_Accuracy = numeric(),
-  Test_Accuracy = numeric(),
+  Train = numeric(),
+  Test = numeric(),
   Notes = character(),
   stringsAsFactors = FALSE
 )
@@ -73,7 +75,7 @@ experiment_log <- data.frame(
 
 ## Decision Trees
 
-#### Experiment 1:
+### Experiment 1:
 
 Objective: Since decision trees recursively partition data to determine the best features upon which to split, the goal here is to find the variable with the greatest predictive power.
 
@@ -106,12 +108,12 @@ Review: The accuracy of this first model is fairly high, at just over 90%, and t
 
 ```{r dt1-log}
 dt1_log <- data.frame(
-  Experiment_ID = 1,
-  Model_Type = "Decision Tree",
-  Features_Used = "duration, poutcome, pdays",
+  ID = 1,
+  Model = "Decision Tree",
+  Features = "duration, poutcome, pdays",
   Hyperparameters = "none",
-  Train_Accuracy = 0.90,
-  Test_Accuracy = 0.89,
+  Train = 0.90,
+  Test = 0.89,
   Notes = "marketing features only"
 )
 
@@ -119,7 +121,7 @@ experiment_log <- bind_rows(experiment_log, dt1_log)
 ```
 
 
-#### Experiment 2:
+### Experiment 2:
 
 Objective: To see if a different set features will be selected for predictive power once the data is altered 
 
@@ -152,16 +154,16 @@ dt2_test_cm <- confusionMatrix(dt2_test_pred, bank_sub_test$y)
 dt2_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy barely changed and this tree appears similar to the first experiment, indicating low variance overall. Also, since the difference between the training and testing accuracy is so small, the models do not appear to have overfit the data. However, only marketing-related features were again chosen by the model, which may ultimately be of limited use for business decision-making (eg customer selection).
+Review: The accuracy barely changed and this tree appears similar to the first experiment, indicating low variance overall. However, only marketing-related features were again chosen by the model, which may ultimately be of limited use for business decision-making (eg customer selection).
 
 ```{r dt2-log}
 dt2_log <- data.frame(
-  Experiment_ID = 2,
-  Model_Type = "Decision Tree",
-  Features_Used = "poutcome, pdays",
+  ID = 2,
+  Model = "Decision Tree",
+  Features = "poutcome, pdays",
   Hyperparameters = "none",
-  Train_Accuracy = 0.89,
-  Test_Accuracy = 0.89,
+  Train = 0.89,
+  Test = 0.89,
   Notes = "dropped duration, minimal changes"
 )
 
@@ -171,7 +173,7 @@ experiment_log <- bind_rows(experiment_log, dt2_log)
 
 ## Random Forests
 
-#### Experiment 3:
+### Experiment 3:
 
 Objective: By switching to the random forest bagging method, the algorithm will select different features at random, and will instead predict on different dimensions of the data.
 
@@ -206,16 +208,16 @@ rf1_test_cm <- confusionMatrix(rf1_test_pred, bank_test$y)
 rf1_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy on the testing data is much lower than on the training set, which indicates overfitting. Aside from the high importance value for `duration`, the next highest ranked features are `month`, `balance` and `age`.
+Review: The accuracy on the training set is 100% with a much lower 0.85 for the testing data, which indicates overfitting. Aside from the high importance value for `duration` as with the decision tree, the next highest ranked features are `month`, `balance` and `age`.
 
 ```{r rf1-log}
 rf1_log <- data.frame(
-  Experiment_ID = 3,
-  Model_Type = "Random Forest",
-  Features_Used = "all, with different ranking order from decision trees after 'duration'",
+  ID = 3,
+  Model = "Random Forest",
+  Features = "all, with different ranking order from decision trees after 'duration'",
   Hyperparameters = "impute method, number of trees",
-  Train_Accuracy = 1.00,
-  Test_Accuracy = 0.85,
+  Train = 1.00,
+  Test = 0.85,
   Notes = "overfitting"
 )
 
@@ -223,7 +225,7 @@ experiment_log <- bind_rows(experiment_log, rf1_log)
 ```
 
 
-#### Experiment 4:
+### Experiment 4:
 
 Objective: For the second random forest model, hyperparameters will be tuned with the aim of reducing overfitting.
 
@@ -262,12 +264,12 @@ Review: The overfitting of the previous experiment was mitigated, but as expecte
 
 ```{r rf2-log}
 rf2_log <- data.frame(
-  Experiment_ID = 4,
-  Model_Type = "Random Forest",
-  Features_Used = "ranked 'duration', 'month', and 'poutcome'",
+  ID = 4,
+  Model = "Random Forest",
+  Features = "ranked 'duration', 'month', and 'poutcome'",
   Hyperparameters = "leaf size, number of features randomly sampled",
-  Train_Accuracy = 0.85,
-  Test_Accuracy = 0.81,
+  Train = 0.85,
+  Test = 0.81,
   Notes = "less accurate, lowered variance"
 )
 
@@ -277,13 +279,13 @@ experiment_log <- bind_rows(experiment_log, rf2_log)
 
 ## XGBoost
 
-#### Experiment 5:
+### Experiment 5:
 
 Objective: The boosting ensemble model XGBoost will be tested to compare accuracy and generate an importance matrix to rank the features' effects on the predictions.
 
-Variations: The data will be augmented via one-hot encoding, converting the string columns to factors with levels.
+Variations: The data will be augmented via one-hot encoding, converting the factor columns with levels to numeric 0s or 1s.
       
-Evaluation: The importance matrix will be plotted visually and the confusion matrix will continue to be utilized.
+Evaluation: The importance rankings will be plotted visually and the confusion matrix will continue to be utilized.
 
 Experiment:
 
@@ -335,16 +337,16 @@ xg1_test_cm <- confusionMatrix(xg1_test_pred_factor, bank_test$y, positive = "ye
 xg1_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy of both testing and training are high. There was a great deal more data wrangling necessary than with the previous algorithms, but the importance matrix allows for feature exploration (and confirms the predictive relationship of `duration` and `y`).
+Review: The accuracy of both testing and training are high, but the model slightly overfit on the training data. There was a great deal more data wrangling necessary than with the previous algorithms, but the importance matrix allows for feature exploration (and re-confirms the predictive relationship of `duration` and `y`).
 
 ```{r xg1-log}
 xg1_log <- data.frame(
-  Experiment_ID = 5,
-  Model_Type = "XGBoost",
-  Features_Used = "all",
+  ID = 5,
+  Model = "XGBoost",
+  Features = "all",
   Hyperparameters = "nrounds = 100, defaults",
-  Train_Accuracy = 0.96,
-  Test_Accuracy = 0.91,
+  Train = 0.96,
+  Test = 0.91,
   Notes = "duration ranked first"
 )
 
@@ -352,20 +354,25 @@ experiment_log <- bind_rows(experiment_log, xg1_log)
 ```
 
 
-#### Experiment 6:
+### Experiment 6:
 
-Objective: Since accuracy is already high, the aim is to use K-fold cross-validation to test whether the model can generalize well and be applied to unseen data.
+Objective: Since accuracy is already high, the aim is to use K-fold cross-validation to decrease overfitting and test whether the model can generalize well and be applied to unseen data.
 
-Variations: XGBoost has a built-in cross-validation function, into which the following will be updated from default:
-- the number of folds, or subsets for training and validation, at 5
-- the `gamma`, a regularization parameter that controls the minimum loss reduction required to make a split and helps prune unnecessary splits in trees, will be changed from 0 to 10 because we have a large dataset with many weak features
-- the `min_child_weight`, another regularization parameter that controls minimum sum of instance weights in a child node, will be changed from 1 to 10, again because the dataset is large enough
+Variations: XGBoost has a built-in cross-validation function, into which the following will be set or updated from default:
+  
+  - the number of folds, or subsets for training and validation, will be 5
+  
+  - the `gamma`, a regularization parameter that controls the minimum loss reduction required to make a split and helps prune unnecessary splits in trees, will be changed from 0 to 10 because we have a large dataset with many weak features
+  
+  - the `min_child_weight`, another regularization parameter that controls minimum sum of instance weights in a child node, will be changed from 1 to 10, again because the dataset is large
 
 Evaluation: The importance and confusion matrices can be compared to the previous experiment.
 
 Experiment:
 
 ```{r xg2-cv}
+set.seed(123)
+
 params2 <- list(
   objective = "binary:logistic",
   min_child_weight = 10,
@@ -415,17 +422,17 @@ xg2_test_cm <- confusionMatrix(xg2_test_pred_factor, bank_test$y, positive = "ye
 xg2_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy was once again barely affected, and the importance matrix also did not change. The model should generalize well on future unseen data. The greatest change was that by using cross-validation to determine the best hyperparameters, the number of boosting rounds was halved and so the final model was more efficient while achieving similar predictive accuracy.
+Review: The accuracy was once again barely affected, and the importance matrix also did not change. The model should generalize well on future unseen data. The greatest change was that by using cross-validation to determine the best hyperparameters, the number of boosting rounds was reduced to nearly half and so the final model was more efficient while achieving similar predictive accuracy.
 
 ```{r xg2-log}
 xg2_log <- data.frame(
-  Experiment_ID = 6,
-  Model_Type = "XGBoost",
-  Features_Used = "all",
-  Hyperparameters = "k-fold cross-validation, gamma, minimum child weight, nrounds = 50",
-  Train_Accuracy = 0.94,
-  Test_Accuracy = 0.91,
-  Notes = "number of boosting rounds reduced by half, similar accuracy"
+  ID = 6,
+  Model = "XGBoost",
+  Features = "all",
+  Hyperparameters = "k-fold cross-validation, gamma, minimum child weight, nrounds = 55",
+  Train = 0.94,
+  Test = 0.91,
+  Notes = "boosting rounds reduced significanty, similar accuracy"
 )
 
 experiment_log <- bind_rows(experiment_log, xg2_log)
@@ -434,13 +441,16 @@ experiment_log <- bind_rows(experiment_log, xg2_log)
 
 # Conclusion
 
+\tiny 
 ```{r conclusion}
-print(experiment_log)
+knitr::kable(experiment_log, format = "pipe", padding = 0)
 ```
 
-Write a short essay summarizing your findings. Your essay should include:
-- Explain why you chose the experiments you did
-- Discuss bias & variance across the experiments e.g., between Decision Tree experiments, and with Random Forest & Adaboost
-- A table with experiments & results
-- What was the optimal model you found, and why
-- What conclusion did you came to? What do you recommend.
+\normalsize
+The above experiment log summarizes the results of all 6 tests. The different algorithms allowed for exploration of the various ways to train and evaluate models for classification. 
+
+The first 2 experiments used similar decision trees, which split the data into branches based on the 'best' feature for information gain, or reduction in uncertainty. This was the simplest algorithm to implement and interpret, with a plot generated to visualize the decision branches. The accuracy was fairly high and close for the training and testing datasets and did not have much variation between the two experiments, but the results were of somewhat limited use for business logic. By having the algorithm select the most import features and not utilizing the rest, the variables relating to the customers and their banking history were left out. The results also changed fairly dramatically (though not unexpectedly) when only a single variable was removed from the data. However, the efficiency of implementation and processing made this algorithm a worthwhile test for prediction. Implementing many different experiments with different changes would be relatively quick and easy. 
+
+The second algorithm tested was random forest, an ensemble method that builds multiple trees in parallel and aggregates their outputs to improve generalization. The first experiment was overfit to the training data and lost accuracy on the testing set. The second experiment tested how changing the `mtry` (the number of variables randomly sampled as candidates at each split) from the default `sqrt(p)` for classification ('p' being the number of predictor variables at 16) to just 1, as well as increasing the `nodesize` to 5 from the default to limit small leaves. This fixed the overfitting issue and balanced the importance rankings but decreased the accuracy to the lowest of all the experiments. With the second, more optimized model, the use of aggregation would most likely allow for the best generalization on unseen data. Ultimately, random forest was the least successful for this dataset.
+
+The final experiments used XGBoost or extreme gradient boosting, also an ensemble method; but trees were built sequentially instead, correcting errors from previous iterations. These experiments returned the highest accuracy on both training and testing data but took the longest time to implement, requiring the categorical columns with levels to be one-hot encoded for modeling, then converted back to factors for interpretation and evaluation. XGBoost also took the longest time to train and was much less computationally efficient. The final experiment used K-fold cross validation to help determine the optimal hyperparameters, another lengthy extra step to code and process but was very useful in creating a more optimal final model. Based on my experiments, I would recommend this algorithm as the best choice for this dataset because it was able to make highly accurate predictions with low variance between the 2 experiments.
