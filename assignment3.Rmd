@@ -1,0 +1,147 @@
+---
+title: "Support Vector Machines"
+author: "Stephanie Chiang"
+date: "Spring 2025"
+output:
+  html_document:
+    df_print: paged
+subtitle: DATA 622 Assignment 3
+---
+
+
+
+20 points
+Read the following articles:
+https://www.hindawi.com/journals/complexity/2021/5550344/
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8137961/
+Search for academic content (at least 3 articles) that compare the use of decision trees vs 
+1. Student demonstrates two (2) articles provided were read by, for example, drawing insights, summarizing articles or via comparison (5)
+2. Three (3) articles provided with URL links (5)
+3. Discussion of a) two articles provided, and b) three articles the students found (5)
+4. Comparison and insight drawn for a) two articles provided, and b) three articles the students found (5)
+ 
+20 points
+1. Explanation of area of expertise/interest (10)
+2. Results related to area of expertise/interest (10)
+
+# SVM Experiment
+
+Continuing from previous work with banking and marketing data, this experiment and analysis will use a support vector machine.
+
+20 points
+
+1. SVM model trained & validated (5)
+2. Hyper-parameter tuning done (5)
+3. Implementation and comparison using more than 1 kernel  (5)
+4. Outputs included with code (5)
+
+```{r lib, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(caret)
+library(e1071)
+```
+
+The data, pre-processing, partitioning and experiment log are all repeated from the previous experiments. 
+
+```{r data}
+bank_raw <- read.csv2(file="bank+marketing/bank/bank-full.csv")
+
+bank <- bank_raw 
+bank <- bank |>
+  mutate(poutcome = na_if(poutcome, "unknown")) |>
+  mutate(poutcome = na_if(poutcome, "other"))
+
+chr_cols <- c("job", "marital", "education", "default", "housing", "loan", "contact", "month", "poutcome", "y")
+bank <- bank |> mutate(across(all_of(chr_cols), as.factor))
+
+head(bank)
+```
+
+```{r split}
+set.seed(123)
+
+splitIndex <- createDataPartition(bank$y, p = 0.8, list = FALSE)
+
+bank_train <- bank[splitIndex,]
+bank_test <- bank[-splitIndex,]
+
+round(prop.table(table(select(bank, y))), 2)
+round(prop.table(table(select(bank_train, y))), 2)
+round(prop.table(table(select(bank_test, y))), 2)
+```
+
+Import the log from the previous experiments for comparison.
+
+```{r tracking, message=FALSE, warning=FALSE}
+experiment_log <- read_csv("experiment_log.csv")
+```
+
+Objective: 
+
+Variations: This model will use a linear kernel and the default cost (hardness/softness of margin) is 1.
+      
+Evaluation: A table will be generated to view the SVM predictions against the actual values.
+
+Experiment:
+
+First, as with random forests, any missing values in the data will need to be imputed. For consistency, I will again apply `na.roughfix`. Next, the numeric columns must be scaled due to how SVMs use distances between data points to determine the hyperplane and make classifications. If a column has a highly variable range of numbers, it could dominate the calculations; scaling helps all balance the features' contributions.
+
+```{r svm-mod}
+set.seed(123)
+
+bank_train3 <- na.roughfix(bank_train)
+bank_test3 <- na.roughfix(bank_test)
+
+num_cols <- sapply(bank_train, is.numeric)
+
+bank_svm1 <- svm(y ~.,
+              data = bank_train,
+              scale = num_cols,
+              kernel = "linear")
+```
+
+```{r dt2-eval}
+# predict and evaluate on training data
+svm1_train_pred <- predict(bank_svm1, bank_train3)
+table(predict = svm1_train_pred, truth = bank_train3$y)
+
+svm1_test_pred <- predict(bank_svm1, bank_test3)
+table(predict = svm1_test_pred, truth = bank_test3$y)
+```
+
+To see if we can improve on this, cross-validation will be performed on models with different `cost` values.
+
+```{r tune}
+tune_mod <- tune(svm,
+                 y ~.,
+                 data = bank_train,
+                 kernel = "linear",
+                 ranges = list(cost = c(0.01, 0.1, 1, 5)))
+
+summary(tune_mod)
+```
+
+
+
+20 points
+Compare the results with the results from previous homework.
+1. Compariosn was done (10)
+2. Comparison was backed-up with facts & figures from results obtained (10)
+
+Answer questions, such as:
+Which algorithm is recommended to get more accurate results?
+Is it better for classification or regression scenarios?
+Do you agree with the recommendations?
+Why?
+
+20 points
+Essay (minimum 500 word document)
+1. Essay included at least 500 words (5)
+2. Summary/conclusions included in essay (5)
+3. Essay was backed-up with facts and figures from assignment work and from the articles (5)
+4. Comparison of SVM with previous approaces (5
+
+ the code should be in the RPub, and the essay in the PDF. There is no value in duplicating code & essay in both places. In a work environment you will typically summarize your findings in a PowerPoint deck or PDF, and have the code in a Jupyter notebook/Rpub to allow drill down into items
+ 
+ Analysis using R or Python (submit code + errors + analysis as notebook or copy/paste to document)
+Include analysis R (or Python) code.
