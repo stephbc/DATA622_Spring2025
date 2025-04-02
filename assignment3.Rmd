@@ -8,32 +8,9 @@ output:
 subtitle: DATA 622 Assignment 3
 ---
 
-
-
-20 points
-Read the following articles:
-https://www.hindawi.com/journals/complexity/2021/5550344/
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8137961/
-Search for academic content (at least 3 articles) that compare the use of decision trees vs 
-1. Student demonstrates two (2) articles provided were read by, for example, drawing insights, summarizing articles or via comparison (5)
-2. Three (3) articles provided with URL links (5)
-3. Discussion of a) two articles provided, and b) three articles the students found (5)
-4. Comparison and insight drawn for a) two articles provided, and b) three articles the students found (5)
- 
-20 points
-1. Explanation of area of expertise/interest (10)
-2. Results related to area of expertise/interest (10)
-
 # SVM Experiment
 
-Continuing from previous work with banking and marketing data, this experiment and analysis will use a support vector machine.
-
-20 points
-
-1. SVM model trained & validated (5)
-2. Hyper-parameter tuning done (5)
-3. Implementation and comparison using more than 1 kernel  (5)
-4. Outputs included with code (5)
+Continuing from my previous work with banking and marketing data, this experiment and analysis will use support vector machines for classification.
 
 ```{r lib, message=FALSE, warning=FALSE}
 library(tidyverse)
@@ -41,7 +18,7 @@ library(caret)
 library(e1071)
 ```
 
-The data, pre-processing, partitioning and experiment log are all repeated from the previous experiments. 
+The steps for data import, pre-processing, and partitioning are all repeated from the previous work. The experiment log is imported as well. 
 
 ```{r data}
 bank_raw <- read.csv2(file="bank+marketing/bank/bank-full.csv")
@@ -70,23 +47,24 @@ round(prop.table(table(select(bank_train, y))), 2)
 round(prop.table(table(select(bank_test, y))), 2)
 ```
 
-Import the log from the previous experiments for comparison.
-
 ```{r tracking, message=FALSE, warning=FALSE}
+# Import the log from the previous experiments for comparison.
 experiment_log <- read_csv("experiment_log.csv")
 ```
 
-Objective: 
+### Experiment 7:
 
-Variations: This model will use a linear kernel and the default cost (hardness/softness of margin) is 1.
+Objective: We will be testing if a support vector machine can be a better model for making classifications on this banking dataset than the algorithms from the previous experiments.
+
+Variations: This first model will use a linear kernel with the default cost (hardness/softness of margin) of 1.
       
-Evaluation: A table will be generated to view the SVM predictions against the actual values.
+Evaluation: A table will be generated to view the SVM predictions against the actual values, along with the confusion matrix for accuracy.
 
 Experiment:
 
 First, as with random forests, any missing values in the data will need to be imputed. For consistency, I will again apply `na.roughfix`. Next, the numeric columns must be scaled due to how SVMs use distances between data points to determine the hyperplane and make classifications. If a column has a highly variable range of numbers, it could dominate the calculations; scaling helps all balance the features' contributions.
 
-```{r svm-mod}
+```{r svm1-mod}
 set.seed(123)
 
 bank_train3 <- na.roughfix(bank_train)
@@ -95,38 +73,219 @@ bank_test3 <- na.roughfix(bank_test)
 num_cols <- sapply(bank_train, is.numeric)
 
 bank_svm1 <- svm(y ~.,
-              data = bank_train,
-              scale = num_cols,
-              kernel = "linear")
+                 data = bank_train,
+                 scale = num_cols,
+                 kernel = "linear")
+
+summary(bank_svm1)
 ```
 
-```{r dt2-eval}
+```{r svm1-eval}
 # predict and evaluate on training data
 svm1_train_pred <- predict(bank_svm1, bank_train3)
 table(predict = svm1_train_pred, truth = bank_train3$y)
+svm1_train_cm <- confusionMatrix(svm1_train_pred, bank_train3$y)
+svm1_train_cm$overall["Accuracy"]
 
+# predict and evaluate on testing data
 svm1_test_pred <- predict(bank_svm1, bank_test3)
 table(predict = svm1_test_pred, truth = bank_test3$y)
+svm1_test_cm <- confusionMatrix(svm1_test_pred, bank_test3$y)
+svm1_test_cm$overall["Accuracy"]
 ```
 
-To see if we can improve on this, cross-validation will be performed on models with different `cost` values.
+With this model, there are 32373 correct classifications and 3797 errors on the training data. On the testing set, there are 952 errors against 8089 correct classifications. So the accuracy values in the confusion matrix are about the same as with previous experiments using decision trees.
+
+```{r svm1-log}
+svm1_log <- data.frame(
+  ID = 7,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "cost = 1",
+  Train = 0.90,
+  Test = 0.89,
+  Notes = "same accuracy as decision tree experiments"
+)
+
+experiment_log <- bind_rows(experiment_log, svm1_log)
+```
+
+### Experiment 8:
+
+Objective: To see if we can improve on this, 10-fold cross-validation will be applied with different, commonly-used `cost` values to determine the best-performing model for training and testing.
+
+Variations: Based on hyperparameter tuning, the cost will be either 0.01, 0.1, 1 (same), or 10.
+      
+Evaluation: The same table and accuracy will be generated.
+
+Experiment:
 
 ```{r tune}
 tune_mod <- tune(svm,
                  y ~.,
                  data = bank_train,
                  kernel = "linear",
-                 ranges = list(cost = c(0.01, 0.1, 1, 5)))
+                 ranges = list(cost = c(0.01, 0.1, 1, 10)))
 
 summary(tune_mod)
 ```
 
+The error rates do not vary, but the best model was determined to have a cost value of 0.01.
+
+```{r tune-eval}
+best_mod <- tune_mod$best.model
+
+# predict and evaluate on training data
+best_train_pred <- predict(best_mod, bank_train3)
+table(predict = best_train_pred, truth = bank_train3$y)
+best_train_cm <- confusionMatrix(best_train_pred, bank_train3$y)
+best_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+best_test_pred <- predict(best_mod, bank_test3)
+table(predict = best_test_pred, truth = bank_test3$y)
+best_test_cm <- confusionMatrix(best_test_pred, bank_test3$y)
+best_test_cm$overall["Accuracy"]
+```
+
+In this case, the number of errors on training was 3753, a small drop of 44. On testing, there 951 errors; the overall improvement was minuscule.
+
+```{r svm2-log}
+svm2_log <- data.frame(
+  ID = 8,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "tuned to best cost = 0.01",
+  Train = 0.90,
+  Test = 0.89,
+  Notes = "no real improvement"
+)
+
+experiment_log <- bind_rows(experiment_log, svm2_log)
+```
+
+### Experiment 9:
+
+Objective: To see if changing the model from linear to the Radial Basis Function (RBF), a common non-linear kernel, will affect performance.
+
+Variations: The kernel will the changed; and in the case of non-linear kernels, the gamma hyperparameter will be taken into account to determine how influential individual points are on the hyperplane, or basically how smooth/sensitive the decision boundary will be. The default value for `svm` is 1/(data dimension).
+      
+Evaluation: The same table and accuracy will be generated.
+
+Experiment:
+
+```{r svm3-mod}
+set.seed(123)
+
+num_cols <- sapply(bank_train, is.numeric)
+
+bank_svm3 <- svm(y ~.,
+                 data = bank_train,
+                 scale = num_cols,
+                 cost = 0.1,
+                 kernel = "radial")
+
+summary(bank_svm3)
+```
+
+```{r svm3-eval}
+# predict and evaluate on training data
+svm3_train_pred <- predict(bank_svm3, bank_train3)
+table(predict = svm3_train_pred, truth = bank_train3$y)
+svm3_train_cm <- confusionMatrix(svm3_train_pred, bank_train3$y)
+svm3_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+svm3_test_pred <- predict(bank_svm3, bank_test3)
+table(predict = svm3_test_pred, truth = bank_test3$y)
+svm3_test_cm <- confusionMatrix(svm3_test_pred, bank_test3$y)
+svm3_test_cm$overall["Accuracy"]
+```
+
+Again, there is minimal change to the errors and accuracy.
+
+```{r svm3-log}
+svm3_log <- data.frame(
+  ID = 9,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "RBF kernel, cost = 0.1, gamma = 0.024",
+  Train = 0.90,
+  Test = 0.90,
+  Notes = "no real improvement"
+)
+
+experiment_log <- bind_rows(experiment_log, svm3_log)
+```
+
+### Experiment 10:
+
+Objective: To perform cross-validation on models with different, commonly-used `gamma` values.
+
+Variations: Based on this hyperparameter tuning, the gamma will be either 0.001, 0.024 (same), 0.1, or 1.
+      
+Evaluation: The same table and accuracy will be generated.
+
+Experiment:
+
+```{r tune2}
+RBF_tune_mod <- tune(svm,
+                     y ~.,
+                     data = bank_train,
+                     kernel = "radial",
+                     ranges = list(gamma = c(0.001, 0.024, 0.1, 1)))
+
+summary(RBF_tune_mod)
+```
+
+A gamma of 0.1 was determined to give the best performance, with an error rate of 0.16; but this is not far off from the previous model.
+
+```{r tune2-eval}
+best_rbf_mod <- RBF_tune_mod$best.model
+
+# predict and evaluate on training data
+brbf_train_pred <- predict(best_rbf_mod, bank_train3)
+table(predict = brbf_train_pred, truth = bank_train3$y)
+brbf_train_cm <- confusionMatrix(brbf_train_pred, bank_train3$y)
+brbf_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+brbf_test_pred <- predict(best_rbf_mod, bank_test3)
+table(predict = brbf_test_pred, truth = bank_test3$y)
+brbf_test_cm <- confusionMatrix(brbf_test_pred, bank_test3$y)
+brbf_test_cm$overall["Accuracy"]
+```
+
+Once again, hyperparameter tuning appeared to have little effect on the performance.
+
+```{r svm4-log}
+svm4_log <- data.frame(
+  ID = 10,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "tuned to best gamma = 0.1",
+  Train = 0.90,
+  Test = 0.90,
+  Notes = "no real improvement"
+)
+
+experiment_log <- bind_rows(experiment_log, svm4_log)
+```
 
 
-20 points
-Compare the results with the results from previous homework.
-1. Compariosn was done (10)
-2. Comparison was backed-up with facts & figures from results obtained (10)
+# SVM Comparison
+
+\tiny 
+```{r conclusion}
+knitr::kable(experiment_log, format = "pipe", padding = 0)
+```
+\normalsize
+
+```{r export-log, eval=FALSE, include=FALSE}
+write_csv(experiment_log, "experiment_log2.csv")
+```
+
+The previous experiments concluded that XGBoost was the best performing model compared to decision trees and random forest. The addition of the results from the SVM experiments does not change my previous conclusion. The SVM models, even when tuned for best cost and gamma hyperparameters, did not vary much in accuracy from each other, nor from the results of the previous second-best performing algorithm, decision trees. For the highest accuracy, XGBoost appears to have 
 
 Answer questions, such as:
 Which algorithm is recommended to get more accurate results?
@@ -134,14 +293,3 @@ Is it better for classification or regression scenarios?
 Do you agree with the recommendations?
 Why?
 
-20 points
-Essay (minimum 500 word document)
-1. Essay included at least 500 words (5)
-2. Summary/conclusions included in essay (5)
-3. Essay was backed-up with facts and figures from assignment work and from the articles (5)
-4. Comparison of SVM with previous approaces (5
-
- the code should be in the RPub, and the essay in the PDF. There is no value in duplicating code & essay in both places. In a work environment you will typically summarize your findings in a PowerPoint deck or PDF, and have the code in a Jupyter notebook/Rpub to allow drill down into items
- 
- Analysis using R or Python (submit code + errors + analysis as notebook or copy/paste to document)
-Include analysis R (or Python) code.
