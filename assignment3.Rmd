@@ -16,6 +16,7 @@ Continuing from my previous work with banking and marketing data, this experimen
 library(tidyverse)
 library(caret)
 library(e1071)
+library(randomForest)
 ```
 
 The steps for data import, pre-processing, and partitioning are all repeated from the previous work. The experiment log is imported as well. 
@@ -285,11 +286,8 @@ knitr::kable(experiment_log, format = "pipe", padding = 0)
 write_csv(experiment_log, "experiment_log2.csv")
 ```
 
-The previous experiments concluded that XGBoost was the best performing model compared to decision trees and random forest. The addition of the results from the SVM experiments does not change my previous conclusion. The SVM models, even when tuned for best cost and gamma hyperparameters, did not vary much in accuracy from each other, nor from the results of the previous second-best performing algorithm, decision trees. For the highest accuracy, XGBoost appears to have 
+# Conclusion
 
-Answer questions, such as:
-Which algorithm is recommended to get more accurate results?
-Is it better for classification or regression scenarios?
-Do you agree with the recommendations?
-Why?
+The previous experiments had determined that XGBoost was the best performing model based on accuracy compared to decision trees and random forest. The addition of these results from the SVM experiments has not changed that conclusion. The SVM models, even when tuned for best cost or gamma hyperparameters, did not vary much in accuracy from each other, nor did they particularly exceed the results of the previous second-best performing algorithm, decision trees (which, unlike SVMs, did not require any particular data manipulation like imputation, encoding or scaling before training).
 
+In the context of this binary classification problem using this large and multidimensional banking dataset, the XGBoost ensemble method performed better than single models like SVM and decision tree, as could be expected. 
