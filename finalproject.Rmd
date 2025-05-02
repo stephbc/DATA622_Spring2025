@@ -1,0 +1,311 @@
+---
+title: "Assignment 4"
+subtitle: "DATA 622 Final Project"
+author: "Stephanie Chiang"
+date: "Spring 2025"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+# Introduction
+
+As (laid-off) software engineer, I have always been concerned with how a career in the current incarnation of the technology industry may relate to individuals' mental health; particularly with so many newsworthy topics of endless discussion that directly affect tech work and workers: the perception of the capabilities of AI on job prospects, the effects of increased social media use on society, the hardware economy and geopolitics, etc.
+
+My aim in this analysis is to attempt the prediction of any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, the culture of the workplace and the resources provided.
+
+
+# Exploratory Data Analysis
+
+```{r lib, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(caret)
+library(xgboost)
+library(randomForest)
+Sys.setenv(RGL_USE_NULL=TRUE)
+library(adabag)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+```
+
+The (data)[https://data.mendeley.com/datasets/mmnzx4w8cg/1] for this study comes from OSMI (Open Sourcing Mental Illness) a non-profit that aims to provide resources and raise awareness of mental health issues in the tech community. This particular dataset is a (compilation)[https://www.sciencedirect.com/science/article/pii/S2352340924003469] of survey responses from workers in tech jobs, collected from 2017 to 2021.
+
+### The Variables
+
+The response variable will be `mental_health`, described as "Whether or not respondents currently have a mental health disorder" as self-reported on the surveys.
+
+Some of the predictor variables include:
+- `tech_company`	Whether or not the respondent's employer is primarily a tech company/organization
+- `benefits`	Whether or not the employer provides mental health benefits as part of healthcare coverage
+- `medical_coverage` Whether or not respondents have medical coverage (private insurance or state-provided) that includes treatment of mental health disorders
+- `workplace_resources`	Whether or not the employer offers resources to learn more about mental health disorders and options for seeking help
+- `mh_employer_discussion`	Whether or not the respondent has ever discussed their mental health with the employer
+- `mh_coworker_discussion` Whether or not the respondent has ever discussed their mental health with coworkers
+- `mh_share` The willingness of respondent to share mental health illness issues with friends and family
+
+```{r import}
+osmi_raw <- read.csv(file = "osmi.csv")
+osmi <- osmi_raw
+glimpse(osmi)
+```
+
+Any unclear or unsure responses are converted to `NA`s for clarity. The character columns are converted to factors with no more than 3 levels. The goal is binary classification made on the `mental_health` column, so the `NA` values there can be dropped entirely.
+
+```{r clean}
+osmi <- osmi |>
+  mutate(benefits = na_if(benefits, "I don't know"),
+         workplace_resources = na_if(workplace_resources, "I don't know"),
+         mental_health = na_if(mental_health, "Don't Know"),
+         mental_health = na_if(mental_health, "Possibly")) |>
+  mutate(across(where(is.character), as.factor))
+
+osmi <- osmi |> drop_na(mental_health)
+```
+
+### Distributions
+
+One measure of respondents' mental health in this dataset is "Willingness to share", or the 0 to 10 value representing the willingness of respondent to share mental health illness issues with friends and family. Here are the distributions by age and gender.
+
+```{r demo, message=FALSE, warning=FALSE}
+ggplot(osmi, aes(x = age, y = mh_share)) +
+  geom_jitter() + 
+  geom_smooth() +
+  labs(y = "Willingness to share", x = "Age")
+
+ggplot(osmi, aes(x = gender, y = mh_share)) +
+  geom_boxplot() + 
+  labs(y = "Willingness to share", x = "")
+```
+Here are some visualizations of the binary categorical variables representing company resources and culture.
+
+```{r bar}
+ggplot(osmi, aes(x = tech_company)) +
+  geom_bar() +
+  labs(title = "Whether the respondent's employer is primarily a tech company", x = "", y = "")
+
+ggplot(osmi, aes(x = mh_employer_discussion)) +
+  geom_bar() +
+  labs(title = "Whether respondent has ever discussed their mental health with the employer", x = "", y = "")
+
+ggplot(osmi, aes(x = mh_coworker_discussion)) +
+  geom_bar() +
+  labs(title = "Whether respondent has ever discussed their mental health with coworkers", x = "", y = "")
+
+ggplot(osmi, aes(x = mental_health)) +
+  geom_bar() +
+  labs(title = "Whether respondent currently reports a mental health issue", x = "", y = "")
+```
+
+With the `NA`s dropped, there are more "Yes" responses in the sample than "No" in the response column.
+
+
+# Algorithm Selection
+
+## Support Vector Machines
+
+Since the dataset is relatively small at only 898 observations, I have chosen to start with SVMs because they can be effective at avoiding overfitting during the training stage, which would be a concern for a decision tree or even ensembles of trees like XGBoost. Cross-validation can be applied to help tune hyperparameters to increase accuracy.
+
+## Feedforward Neural Networks
+
+Since our goal is a simple binary classification task, I have selected a Multilayer Perceptron (MLP), or a simple feedforward neural network. Other types of neural networks tend to work best on larger datasets and problems like image processing, which could be overkill on this task.
+
+
+# Experimentation & Model Training
+
+```{r split}
+set.seed(101)
+
+splitIndex <- createDataPartition(osmi$mental_health, p = 0.8, list = FALSE)
+
+osmi_train <- osmi[splitIndex,]
+osmi_test <- osmi[-splitIndex,]
+
+round(prop.table(table(select(osmi, mental_health))), 2)
+round(prop.table(table(select(osmi_train, mental_health))), 2)
+round(prop.table(table(select(osmi_test, mental_health))), 2)
+```
+
+```{r tracking}
+experiment_log <- data.frame(
+  ID = integer(),
+  Model = character(),
+  Features = character(),
+  Hyperparameters = character(),
+  Train = numeric(),
+  Test = numeric(),
+  Notes = character(),
+  stringsAsFactors = FALSE
+)
+```
+
+## Support Vector Machines
+
+### Experiment 1:
+
+Objective: Since SVMs generalize well on smaller datasets like this one, we can start here for baseline accuracy comparisons.
+
+Variations: This first model will use a linear kernel with the default cost (hardness/softness of margin) of 1. The missing values must be imputed, here using `na.roughfix`. The numeric columns must be scaled to balance the features' contributions in determining the hyperplane.
+      
+Evaluation: using the confusion matrix for accuracy.
+
+Experiment:
+
+```{r svm1-mod}
+set.seed(101)
+
+osmi_train2 <- na.roughfix(osmi_train)
+osmi_test2 <- na.roughfix(osmi_test)
+
+num_cols <- sapply(osmi_train, is.numeric)
+
+svm1 <- svm(mental_health ~.,
+            data = osmi_train,
+            scale = num_cols,
+            kernel = "linear")
+
+summary(svm1)
+```
+
+```{r svm1-eval}
+# predict and evaluate on training data
+svm1_train_pred <- predict(svm1, osmi_train2)
+svm1_train_cm <- confusionMatrix(svm1_train_pred, osmi_train2$mental_health)
+svm1_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+svm1_test_pred <- predict(svm1, osmi_test2)
+svm1_test_cm <- confusionMatrix(svm1_test_pred, osmi_test2$mental_health)
+svm1_test_cm$overall["Accuracy"]
+```
+Review: The accuracy for rates are close but mediocre.
+
+```{r svm1-log}
+svm1_log <- data.frame(
+  ID = 1,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "cost = 1",
+  Train = 0.73,
+  Test = 0.68,
+  Notes = "mediocre results"
+)
+
+experiment_log <- bind_rows(experiment_log, svm1_log)
+```
+
+### Experiment 2:
+
+Objective: 10-fold cross-validation will be applied with different, commonly-used `cost` values to determine the best-performing hyperparameters for a second test.
+
+Variations: The cost will be validated on 0.01, 0.1, 1 (default), or 10.
+      
+Evaluation: using the confusion matrix for accuracy.
+
+Experiment:
+
+```{r svm-tune}
+tune_mod <- tune(svm,
+                 mental_health ~.,
+                 data = osmi_train,
+                 kernel = "linear",
+                 ranges = list(cost = c(0.01, 0.1, 1, 10)))
+
+summary(tune_mod)
+```
+
+```{r tune-eval}
+best_mod <- tune_mod$best.model
+
+# predict and evaluate on training data
+best_train_pred <- predict(best_mod, osmi_train2)
+best_train_cm <- confusionMatrix(best_train_pred, osmi_train2$mental_health)
+best_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+best_test_pred <- predict(best_mod, osmi_test2)
+best_test_cm <- confusionMatrix(best_test_pred, osmi_test2$mental_health)
+best_test_cm$overall["Accuracy"]
+```
+
+Review: The accuracy on both training and testing has actually dropped slightly. This indicates to me that SVM has not been particular successful on this dataset.
+
+```{r svm2-log}
+svm2_log <- data.frame(
+  ID = 2,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "tuned to best cost = 0.01",
+  Train = 0.71,
+  Test = 0.65,
+  Notes = "no real improvement"
+)
+
+experiment_log <- bind_rows(experiment_log, svm2_log)
+```
+
+
+## Feedforward Neural Network
+
+### Experiment 3:
+
+Objective: We will test whether a neural network can improve upon the accuracy rates over the traditional ML experiment.
+
+Variations: .
+      
+Evaluation: using the confusion matrix for accuracy.
+
+Experiment:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Results & Comparison 
+
+Make your conclusions from your analysis. Please be sure to address the business impact (it could be of any domain) of your solution.
+
+
+Deliverable:
+Your final presentation (essay or video) should include:
+The traditional R file or Python file and essay,
+An Essay (minimum 500 word document) or Video (5 to 8 minutes recording)
+Include the execution and explanation of your code. 
+
+***
+
+Data Selection 10	
+Appropriate data selected
+
+Trained Models 10	
+Models trained on chosen algorithms
+
+Problem Description	10	
+1. Business problem defined (5)
+2. Business problem translated to data science problem (5)
+
+Dataset Analysis	10	
+1. Exploratory data analysis (5)
+2. Experimentation performed (5)
+
+Methodologies used	10	
+Two different algorithms chosen
+
+Conclusions - with business impact	20	
+1. Comparison of results (10)
+2. Business impact included (10)
+
+Essay/Video	30	
+1. Essay was at least 500 words/video was at least 5 minutes (10)
+2. Quality of work (10)
+3. Summary with business impact (10)
