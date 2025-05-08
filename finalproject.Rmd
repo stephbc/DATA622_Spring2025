@@ -11,9 +11,9 @@ output:
 
 # Introduction
 
-As (laid-off) software engineer, I have always been concerned with how a career in the current incarnation of the technology industry may relate to individuals' mental health; particularly with so many newsworthy topics of endless discussion that directly affect tech work and workers: the perception of the capabilities of AI on job prospects, the effects of increased social media use on society, the hardware economy and geopolitics, etc.
+As (laid-off) software engineer, I have personally had concerns with how a career in the current incarnation of the technology industry may relate to individuals' mental health. There are so many issues generating endless discussion in traditional and new media that directly affect tech work and workers, like the perception of the capabilities of AI on job prospects, the effects of increased social media use on society, the hardware economy and geopolitics, etc.
 
-My aim in this analysis is to attempt the prediction of any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, the culture of the workplace and the resources provided.
+My focus in this analysis is to examine any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, like the culture of the workplace and the resources provided. This information could be valuable in the development of actionable changes by tech employers to foster more supportive and rewarding environments. I believe it's important to remind and reiterate to companies and their decision-makers that the health and well-being of their employees is the base upon which their businesses are built.
 
 
 # Exploratory Data Analysis
@@ -21,52 +21,57 @@ My aim in this analysis is to attempt the prediction of any possible relationshi
 ```{r lib, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(caret)
-library(xgboost)
-library(randomForest)
-Sys.setenv(RGL_USE_NULL=TRUE)
-library(adabag)
-library(rpart)
-library(rpart.plot)
 library(e1071)
+library(randomForest)
+library(neuralnet)
+library(keras)
 ```
 
 The (data)[https://data.mendeley.com/datasets/mmnzx4w8cg/1] for this study comes from OSMI (Open Sourcing Mental Illness) a non-profit that aims to provide resources and raise awareness of mental health issues in the tech community. This particular dataset is a (compilation)[https://www.sciencedirect.com/science/article/pii/S2352340924003469] of survey responses from workers in tech jobs, collected from 2017 to 2021.
 
 ### The Variables
 
-The response variable will be `mental_health`, described as "Whether or not respondents currently have a mental health disorder" as self-reported on the surveys.
+The response variable will be `mental_health`, described as "Whether or not respondents currently have a mental health disorder" as self-reported on the surveys. To me, this variable is less an indication of the actual rates of poor mental health in employees than it is an expression of the rate of openness/awareness of those issues. In other words, the data will technically be trained to predict "Yes" if employees feel safe enough to talk about sensitive personal issues in the context of their workplace, even when the survey is anonymized.
 
 Some of the predictor variables include:
-- `tech_company`	Whether or not the respondent's employer is primarily a tech company/organization
-- `benefits`	Whether or not the employer provides mental health benefits as part of healthcare coverage
-- `medical_coverage` Whether or not respondents have medical coverage (private insurance or state-provided) that includes treatment of mental health disorders
-- `workplace_resources`	Whether or not the employer offers resources to learn more about mental health disorders and options for seeking help
-- `mh_employer_discussion`	Whether or not the respondent has ever discussed their mental health with the employer
+- `tech_company`	Whether or not the respondent's employer is primarily a tech company/organization.
+- `benefits`	Whether or not the employer provides mental health benefits as part of healthcare coverage.
+- `medical_coverage` Whether or not respondents have medical coverage (private insurance or state-provided) that includes treatment of mental health disorders.
+- `workplace_resources`	Whether or not the employer offers resources to learn more about mental health disorders and options for seeking help.
+- `mh_employer_discussion`	Whether or not the respondent has ever discussed their mental health with the employer.
 - `mh_coworker_discussion` Whether or not the respondent has ever discussed their mental health with coworkers
-- `mh_share` The willingness of respondent to share mental health illness issues with friends and family
+- `mh_share` The willingness of respondent to share mental health illness issues with friends and family, on a scale from 0 to 10.
 
 ```{r import}
 osmi_raw <- read.csv(file = "osmi.csv")
-osmi <- osmi_raw
-glimpse(osmi)
+glimpse(osmi_raw)
+table(osmi$country)
 ```
 
-Any unclear or unsure responses are converted to `NA`s for clarity. The character columns are converted to factors with no more than 3 levels. The goal is binary classification made on the `mental_health` column, so the `NA` values there can be dropped entirely.
+The data will be cleaned and transformed as follows:
+- some unclear or unsure responses are converted to `NA`s
+- character columns are converted to factors with no more than 3 levels
+- `country` column will be converted to "USA" or "Other" since the majority of respondents are from the US
+
+Also, as discussed above, since the goal is binary classification made on the `mental_health` column, the "Don't Know" value will be converted to "No" and the "Possibly" value will be interpreted as "Yes" (interpreted here as comfortable enough in their workplace to answer affirmatively).
 
 ```{r clean}
+osmi <- osmi_raw
+
 osmi <- osmi |>
   mutate(benefits = na_if(benefits, "I don't know"),
          workplace_resources = na_if(workplace_resources, "I don't know"),
-         mental_health = na_if(mental_health, "Don't Know"),
-         mental_health = na_if(mental_health, "Possibly")) |>
+         country = case_match(country, "United States of America" ~ "USA", .default = "Other"),
+         mental_health = case_match(mental_health, "Don't Know" ~ "No", .default = mental_health),
+         mental_health = case_match(mental_health, "Possibly" ~ "Yes", .default = mental_health)) |>
   mutate(across(where(is.character), as.factor))
 
-osmi <- osmi |> drop_na(mental_health)
+head(osmi)
 ```
 
 ### Distributions
 
-One measure of respondents' mental health in this dataset is "Willingness to share", or the 0 to 10 value representing the willingness of respondent to share mental health illness issues with friends and family. Here are the distributions by age and gender.
+One measure of respondents' mental health in this dataset is the employees' "Willingness to share" mental health illness issues with friends and family. Here are the distributions by age and gender, with slightly higher frequency for workers in their 30s and with gender identity reported as 'other'.
 
 ```{r demo, message=FALSE, warning=FALSE}
 ggplot(osmi, aes(x = age, y = mh_share)) +
@@ -78,7 +83,7 @@ ggplot(osmi, aes(x = gender, y = mh_share)) +
   geom_boxplot() + 
   labs(y = "Willingness to share", x = "")
 ```
-Here are some visualizations of the binary categorical variables representing company resources and culture.
+The binary categorical variables representing company resources and culture are visualized below. There clear majorities in the data for companies that are in the tech industry and for employees having never discussed mental health with the employer, even though more employees reported "Yes" for having mental health issues.
 
 ```{r bar}
 ggplot(osmi, aes(x = tech_company)) +
@@ -98,21 +103,20 @@ ggplot(osmi, aes(x = mental_health)) +
   labs(title = "Whether respondent currently reports a mental health issue", x = "", y = "")
 ```
 
-With the `NA`s dropped, there are more "Yes" responses in the sample than "No" in the response column.
-
-
 # Algorithm Selection
 
 ## Support Vector Machines
 
-Since the dataset is relatively small at only 898 observations, I have chosen to start with SVMs because they can be effective at avoiding overfitting during the training stage, which would be a concern for a decision tree or even ensembles of trees like XGBoost. Cross-validation can be applied to help tune hyperparameters to increase accuracy.
+Since the dataset is relatively small with only 1242 observations, I have chosen to begin with SVMs because these models can be effective at avoiding overfitting during the training stage, which could be a concern for a decision tree or even ensembles of trees like XGBoost. Cross-validation can be applied to help further tune hyperparameters and increase accuracy and efficiency.
 
-## Feedforward Neural Networks
+## Neural Networks
 
-Since our goal is a simple binary classification task, I have selected a Multilayer Perceptron (MLP), or a simple feedforward neural network. Other types of neural networks tend to work best on larger datasets and problems like image processing, which could be overkill on this task.
+I have also selected a Multilayer Perceptron (MLP) aka a simple feedforward neural network because the goal is a simple binary classification task. Other types of neural networks tend to work well on larger datasets and complex problems like image processing, which could be overkill on this more focused task.
 
 
 # Experimentation & Model Training
+
+The data is split for training and testing. The `NA`s are imputed using `na.roughfix` which replaces missing numeric values with medians and factor variables with the most frequent levels (breaking ties at random).
 
 ```{r split}
 set.seed(101)
@@ -121,6 +125,9 @@ splitIndex <- createDataPartition(osmi$mental_health, p = 0.8, list = FALSE)
 
 osmi_train <- osmi[splitIndex,]
 osmi_test <- osmi[-splitIndex,]
+
+osmi_train <- na.roughfix(osmi_train)
+osmi_test <- na.roughfix(osmi_test)
 
 round(prop.table(table(select(osmi, mental_health))), 2)
 round(prop.table(table(select(osmi_train, mental_health))), 2)
@@ -144,19 +151,16 @@ experiment_log <- data.frame(
 
 ### Experiment 1:
 
-Objective: Since SVMs generalize well on smaller datasets like this one, we can start here for baseline accuracy comparisons.
+Objective: Since SVMs generalize well on smaller datasets like this one, this can be a baseline for accuracy comparisons.
 
-Variations: This first model will use a linear kernel with the default cost (hardness/softness of margin) of 1. The missing values must be imputed, here using `na.roughfix`. The numeric columns must be scaled to balance the features' contributions in determining the hyperplane.
+Variations: This first model will use a linear kernel with the default cost (hardness/softness of margin) of 1. The missing values must be imputed, here using `na.roughfix`. The model has built-in scaling for the numeric columns to balance the features' contributions in determining the hyperplane.
       
-Evaluation: using the confusion matrix for accuracy.
+Evaluation: Generating the confusion matrix for accuracy.
 
 Experiment:
 
 ```{r svm1-mod}
 set.seed(101)
-
-osmi_train2 <- na.roughfix(osmi_train)
-osmi_test2 <- na.roughfix(osmi_test)
 
 num_cols <- sapply(osmi_train, is.numeric)
 
@@ -170,16 +174,16 @@ summary(svm1)
 
 ```{r svm1-eval}
 # predict and evaluate on training data
-svm1_train_pred <- predict(svm1, osmi_train2)
-svm1_train_cm <- confusionMatrix(svm1_train_pred, osmi_train2$mental_health)
+svm1_train_pred <- predict(svm1, osmi_train)
+svm1_train_cm <- confusionMatrix(svm1_train_pred, osmi_train$mental_health)
 svm1_train_cm$overall["Accuracy"]
 
 # predict and evaluate on testing data
-svm1_test_pred <- predict(svm1, osmi_test2)
-svm1_test_cm <- confusionMatrix(svm1_test_pred, osmi_test2$mental_health)
+svm1_test_pred <- predict(svm1, osmi_test)
+svm1_test_cm <- confusionMatrix(svm1_test_pred, osmi_test$mental_health)
 svm1_test_cm$overall["Accuracy"]
 ```
-Review: The accuracy for rates are close but mediocre.
+Review: The accuracy for rates for training and testing indicate a decent performance; but improvement would be ideal.
 
 ```{r svm1-log}
 svm1_log <- data.frame(
@@ -187,21 +191,70 @@ svm1_log <- data.frame(
   Model = "SVM",
   Features = "all",
   Hyperparameters = "cost = 1",
-  Train = 0.73,
-  Test = 0.68,
-  Notes = "mediocre results"
+  Train = 0.70,
+  Test = 0.66,
+  Notes = "mediocre predictive accuracy"
 )
 
 experiment_log <- bind_rows(experiment_log, svm1_log)
 ```
 
+
 ### Experiment 2:
 
-Objective: 10-fold cross-validation will be applied with different, commonly-used `cost` values to determine the best-performing hyperparameters for a second test.
+Objective: Since the dataset is on the smaller side, the kernel will be adjusted to see if the accuracy can be increased.
 
-Variations: The cost will be validated on 0.01, 0.1, 1 (default), or 10.
+Variations: The kernel will be changed to the nonlinear RBF (Radial Basis Function), which is more flexible and able to read unclear patterns.
+
+Evaluation: Generating the confusion matrix for accuracy.
+
+Experiment:
+
+```{r svm2-mod}
+svm2 <- svm(mental_health ~.,
+            data = osmi_train,
+            scale = num_cols,
+            kernel = "radial")
+
+summary(svm2)
+```
+
+```{r svm1-eval}
+# predict and evaluate on training data
+svm2_train_pred <- predict(svm2, osmi_train)
+svm2_train_cm <- confusionMatrix(svm2_train_pred, osmi_train$mental_health)
+svm2_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+svm2_test_pred <- predict(svm2, osmi_test)
+svm2_test_cm <- confusionMatrix(svm2_test_pred, osmi_test$mental_health)
+svm2_test_cm$overall["Accuracy"]
+```
+
+Review: The accuracy improved slightly, but with a larger difference between training and testing.
+
+```{r svm1-log}
+svm2_log <- data.frame(
+  ID = 2,
+  Model = "SVM",
+  Features = "all",
+  Hyperparameters = "kernel = radial",
+  Train = 0.74,
+  Test = 0.68,
+  Notes = "slight improvement and overfitting"
+)
+
+experiment_log <- bind_rows(experiment_log, svm2_log)
+```
+
+
+### Experiment 3:
+
+Objective: 10-fold cross-validation will be applied with different, commonly-used `cost` and `gamma` values to determine the best-performing hyperparameters for a final SVM test.
+
+Variations: Based on the above, the cost may be changed to 0.01, 0.1, 1 (same), or 10. The best gamma will be chosen from 0.001, 0.025 (default), 0.1, or 1.
       
-Evaluation: using the confusion matrix for accuracy.
+Evaluation: Generating the confusion matrix for accuracy.
 
 Experiment:
 
@@ -209,8 +262,8 @@ Experiment:
 tune_mod <- tune(svm,
                  mental_health ~.,
                  data = osmi_train,
-                 kernel = "linear",
-                 ranges = list(cost = c(0.01, 0.1, 1, 10)))
+                 kernel = "radial",
+                 ranges = list(cost = c(0.01, 0.1, 1, 10), gamma = c(0.001, 0.025, 0.1, 1)))
 
 summary(tune_mod)
 ```
@@ -219,51 +272,127 @@ summary(tune_mod)
 best_mod <- tune_mod$best.model
 
 # predict and evaluate on training data
-best_train_pred <- predict(best_mod, osmi_train2)
-best_train_cm <- confusionMatrix(best_train_pred, osmi_train2$mental_health)
+best_train_pred <- predict(best_mod, osmi_train)
+best_train_cm <- confusionMatrix(best_train_pred, osmi_train$mental_health)
 best_train_cm$overall["Accuracy"]
 
 # predict and evaluate on testing data
-best_test_pred <- predict(best_mod, osmi_test2)
-best_test_cm <- confusionMatrix(best_test_pred, osmi_test2$mental_health)
+best_test_pred <- predict(best_mod, osmi_test)
+best_test_cm <- confusionMatrix(best_test_pred, osmi_test$mental_health)
 best_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy on both training and testing has actually dropped slightly. This indicates to me that SVM has not been particular successful on this dataset.
+Review: The hyperparameter tuning determined that the best model raised the `gamma` to 0.1, which reduced the effect of points further from the decision boundary; as expected, this resulted in the model overfitting on training data. 
 
-```{r svm2-log}
-svm2_log <- data.frame(
-  ID = 2,
+The performance of SVM on this dataset has been passable, but there may be better algorithms to try.
+
+```{r svm3-log}
+svm3_log <- data.frame(
+  ID = 3,
   Model = "SVM",
   Features = "all",
-  Hyperparameters = "tuned to best cost = 0.01",
-  Train = 0.71,
+  Hyperparameters = "tuned to best gamma 0.1",
+  Train = 0.72,
   Test = 0.65,
-  Notes = "no real improvement"
+  Notes = "modest increase in overfitting"
 )
 
-experiment_log <- bind_rows(experiment_log, svm2_log)
+experiment_log <- bind_rows(experiment_log, svm3_log)
 ```
 
 
-## Feedforward Neural Network
+## Simple Neural Network
 
-### Experiment 3:
+### Experiment 4:
 
-Objective: We will test whether a neural network can improve upon the accuracy rates over the traditional ML experiment.
+Objective: We will test whether a simple neural network can predict more effectively and accurately on this dataset than SVM.
 
-Variations: .
+Variations: 
+- In a simple neural network, features must be hand-selected for the formula. A simple `randomForest` can rank importance using `MeanDecreaseGini` aka the reduction in impurity (business logic could be applied instead, but a RF was more reproducible). The top 5 features will be used.
+- Factor columns must be converted to dummy variables (one-hot encoded), then converted back for interpretation.
+- The neural network will have 2 hidden layers, the first layer with 3 neurons and the second with 2.
       
-Evaluation: using the confusion matrix for accuracy.
+Evaluation: Generating the confusion matrix for accuracy.
 
 Experiment:
 
+```{r features}
+rf <- randomForest(mental_health ~ ., data = osmi_train)
+importance(rf)
+```
+
+```{r nn1-scale1h}
+otrain_scaled <- osmi_train
+otrain_scaled[num_cols] <- scale(otrain_scaled[num_cols])
+mh_1h_train <- ifelse(otrain_scaled$mental_health == "Yes", 1, 0)
+otrain_scaled <- model.matrix(mental_health ~ ., data = otrain_scaled)[, -1]
+otrain_scaled <- cbind(mental_health = mh_1h_train, otrain_scaled)
+
+otest_scaled <- osmi_test
+otest_scaled[num_cols] <- scale(otest_scaled[num_cols])
+mh_1h_test <- ifelse(otest_scaled$mental_health == "Yes", 1, 0)
+otest_scaled <- model.matrix(mental_health ~ ., data = otest_scaled)[, -1]
+otest_scaled <- cbind(mental_health = mh_1h_test, otest_scaled)
+```
+
+```{r nn1-mod}
+nn1 <- neuralnet(mental_health ~ age + mh_share + mh_coworker_discussionYes + mh_employer_discussionYes + countryUSA,
+                 data = otrain_scaled,
+                 hidden = c(3, 2))
+
+summary(nn1)
+
+plot(nn1, rep = "best")
+```
+
+```{r nn1-eval}
+# predict and evaluate on training data
+nn1_train_pred <- predict(nn1, otrain_scaled)
+
+# convert probabilities back to binary yes/no at threshold = 0.5,
+nn1_train_pred_factor <- ifelse(nn1_train_pred > 0.5, "Yes", "No")
+
+# then back to factors for the confusion matrix
+nn1_train_pred_factor <- factor(nn1_train_pred_factor, levels = c("No", "Yes"))
+nn1_train_cm <- confusionMatrix(nn1_train_pred_factor, osmi_train$mental_health, positive = "Yes")
+nn1_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+nn1_test_pred <- predict(nn1, otest_scaled)
+nn1_test_pred_factor <- ifelse(nn1_test_pred > 0.5, "Yes", "No")
+nn1_test_pred_factor <- factor(nn1_test_pred_factor, levels = c("No", "Yes"))
+nn1_test_cm <- confusionMatrix(nn1_test_pred_factor, osmi_test$mental_health, positive = "Yes")
+nn1_test_cm$overall["Accuracy"]
+```
+
+Review: 
+
+```{r nn1-log}
+nn1_log <- data.frame(
+  ID = 4,
+  Model = "Simple Neural Net",
+  Features = "Top 5 based on RF",
+  Hyperparameters = "",
+  Train = 0.72,
+  Test = 0.65,
+  Notes = "similar results to SVM"
+)
+
+experiment_log <- bind_rows(experiment_log, nn1_log)
+```
 
 
+### Experiment 5:
 
+Objective: W
 
+Variations: 
+- 
+- The neural network will have 2 hidden layers, the first layer with 4 neurons and the second with 2.
+      
+Evaluation: Generating the confusion matrix for accuracy.
 
-
+Experiment:
 
 
 
