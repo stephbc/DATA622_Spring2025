@@ -1,5 +1,5 @@
 ---
-title: "Assignment 4"
+title: "Mental Health in the Tech Community"
 subtitle: "DATA 622 Final Project"
 author: "Stephanie Chiang"
 date: "Spring 2025"
@@ -11,9 +11,11 @@ output:
 
 # Introduction
 
-As (laid-off) software engineer, I have personally had concerns with how a career in the current incarnation of the technology industry may relate to individuals' mental health. There are so many issues generating endless discussion in traditional and new media that directly affect tech work and workers, like the perception of the capabilities of AI on job prospects, the effects of increased social media use on society, the hardware economy and geopolitics, etc.
+Like many other (laid-off) software engineers, I have personally had concerns throughout my career about continuing in the current incarnation of the technology industry due to the effects on individuals' mental health. There are innumerable issues generating endless discussion in traditional and new media that directly affect tech work and workers, like the perception of the capabilities of AI on job prospects, the effects of increased social media use on society, the hardware economy and geopolitics, etc.
 
-My focus in this analysis is to examine any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, like the culture of the workplace and the resources provided. This information could be valuable in the development of actionable changes by tech employers to foster more supportive and rewarding environments. I believe it's important to remind and reiterate to companies and their decision-makers that the health and well-being of their employees is the base upon which their businesses are built.
+My focus in this analysis will be to examine any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, like the culture of the workplace and the resources provided. This information could be valuable in the development of actionable changes by tech companies to foster more supportive and rewarding environments. Studies on data like this could help improve productivity and attract the best possible labor force. But more importantly, I believe employers and decision-makers have a moral and ethical responsibility to their employees, and must remember that those workers' health and well-being is the base upon which businesses are built.
+
+Using the below survey data, the goal is to develop a predictive or explanatory model to identify the most significant factors associated with higher or lower likelihoods of mental health reporting, enabling data-driven recommendations for improving workplace support systems in the tech industry.
 
 
 # Exploratory Data Analysis
@@ -71,7 +73,7 @@ head(osmi)
 
 ### Distributions
 
-One measure of respondents' mental health in this dataset is the employees' "Willingness to share" mental health illness issues with friends and family. Here are the distributions by age and gender, with slightly higher frequency for workers in their 30s and with gender identity reported as 'other'.
+The sole numeric feature of the mental health data in this set is the employees' "Willingness to share" mental health illness issues with friends and family. Here are the distributions by demographic data: `age`, `gender` and `country.` There are slightly higher frequencies of responses for workers in their 30s and with gender identity reported as 'other'.
 
 ```{r demo, message=FALSE, warning=FALSE}
 ggplot(osmi, aes(x = age, y = mh_share)) +
@@ -80,6 +82,10 @@ ggplot(osmi, aes(x = age, y = mh_share)) +
   labs(y = "Willingness to share", x = "Age")
 
 ggplot(osmi, aes(x = gender, y = mh_share)) +
+  geom_boxplot() + 
+  labs(y = "Willingness to share", x = "")
+
+ggplot(osmi, aes(x = country, y = mh_share)) +
   geom_boxplot() + 
   labs(y = "Willingness to share", x = "")
 ```
@@ -384,13 +390,23 @@ experiment_log <- bind_rows(experiment_log, nn1_log)
 
 ### Experiment 5:
 
-Objective: W
+Objective: Refocus on changes: select features dealing solely with company data
 
-Variations: 
-- 
-- The neural network will have 2 hidden layers, the first layer with 4 neurons and the second with 2.
+Variations: Feature selection:
       
 Evaluation: Generating the confusion matrix for accuracy.
+
+
+
+
+
+
+
+### Experiment 6
+
+Objective: 
+
+
 
 Experiment:
 
@@ -400,41 +416,15 @@ Experiment:
 
 
 
+
+
 # Results & Comparison 
 
-Make your conclusions from your analysis. Please be sure to address the business impact (it could be of any domain) of your solution.
-
-
-Deliverable:
-Your final presentation (essay or video) should include:
-The traditional R file or Python file and essay,
-An Essay (minimum 500 word document) or Video (5 to 8 minutes recording)
-Include the execution and explanation of your code. 
-
-***
-
-Data Selection 10	
-Appropriate data selected
-
-Trained Models 10	
-Models trained on chosen algorithms
-
-Problem Description	10	
-1. Business problem defined (5)
-2. Business problem translated to data science problem (5)
-
-Dataset Analysis	10	
-1. Exploratory data analysis (5)
-2. Experimentation performed (5)
-
-Methodologies used	10	
-Two different algorithms chosen
-
-Conclusions - with business impact	20	
+Make your conclusions from your analysis.
+Conclusions - with business impact	
 1. Comparison of results (10)
 2. Business impact included (10)
 
-Essay/Video	30	
-1. Essay was at least 500 words/video was at least 5 minutes (10)
-2. Quality of work (10)
-3. Summary with business impact (10)
+Deliverable:
+The traditional R file
+An Essay (minimum 500 word document), incl Summary with business impact
