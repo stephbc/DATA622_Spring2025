@@ -1,6 +1,6 @@
 ---
 title: "Mental Health in the Tech Community"
-subtitle: "DATA 622 Final Project"
+subtitle: "DATA 622 Final Project / Assignment 4"
 author: "Stephanie Chiang"
 date: "Spring 2025"
 output:
@@ -13,14 +13,14 @@ output:
 
 Like many other (laid-off) software engineers, I have personally had concerns throughout my career about continuing in the current incarnation of the technology industry due to the effects on individuals' mental health. There are innumerable issues generating endless discussion in traditional and new media that directly affect tech work and workers, like the perception of the capabilities of AI on job prospects, the effects of increased social media use on society, the hardware economy and geopolitics, etc.
 
-My focus in this analysis will be to examine any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, like the culture of the workplace and the resources provided. This information could be valuable in the development of actionable changes by tech companies to foster more supportive and rewarding environments. Studies on data like this could help improve productivity and attract the best possible labor force. But more importantly, I believe employers and decision-makers have a moral and ethical responsibility to their employees, and must remember that those workers' health and well-being is the base upon which businesses are built.
+My focus in this analysis will be to examine any possible relationships between the reporting of mental health issues in tech workers and the characteristics of the companies that employ them, including the culture of the workplace and the resources provided. This information could be valuable in the development of actionable changes by tech companies to foster more supportive and rewarding environments. Studies on data like this could help improve productivity and attract the best possible labor force; but more importantly, I believe employers and decision-makers have a moral and ethical responsibility to their employees. They must remember that their workers' health and well-being is the base upon which businesses are built.
 
-Using the below survey data, the goal is to develop a predictive or explanatory model to identify the most significant factors associated with higher or lower likelihoods of mental health reporting, enabling data-driven recommendations for improving workplace support systems in the tech industry.
+Using the below survey data, my goal is to develop an explanatory model to identify the most significant factors associated with higher or lower likelihoods of mental health reporting, enabling data-driven recommendations for improving workplace support systems in the tech industry.
 
 
 # Exploratory Data Analysis
 
-```{r lib, message=FALSE, warning=FALSE}
+```{r lib, message=FALSE, warning=FALSE, include=FALSE}
 library(tidyverse)
 library(caret)
 library(e1071)
@@ -29,33 +29,44 @@ library(neuralnet)
 library(keras)
 ```
 
-The (data)[https://data.mendeley.com/datasets/mmnzx4w8cg/1] for this study comes from OSMI (Open Sourcing Mental Illness) a non-profit that aims to provide resources and raise awareness of mental health issues in the tech community. This particular dataset is a (compilation)[https://www.sciencedirect.com/science/article/pii/S2352340924003469] of survey responses from workers in tech jobs, collected from 2017 to 2021.
+The [data](https://data.mendeley.com/datasets/mmnzx4w8cg/1) for this study comes from OSMI (Open Sourcing Mental Illness) a non-profit that aims to provide resources and raise awareness of mental health issues in the tech community. This particular dataset is a [compilation](https://www.sciencedirect.com/science/article/pii/S2352340924003469) of survey responses from workers in tech jobs, collected from 2017 to 2021.
 
 ### The Variables
 
-The response variable will be `mental_health`, described as "Whether or not respondents currently have a mental health disorder" as self-reported on the surveys. To me, this variable is less an indication of the actual rates of poor mental health in employees than it is an expression of the rate of openness/awareness of those issues. In other words, the data will technically be trained to predict "Yes" if employees feel safe enough to talk about sensitive personal issues in the context of their workplace, even when the survey is anonymized.
+The response variable will be `mental_health`, described as "Whether or not respondents currently have a mental health disorder" as self-reported on the surveys. To me, this variable is less an indication of the actual rates of poor mental health in employees than it is an expression of the rate of openness and awareness of those issues. In other words, the data will really be trained to predict "Yes" if employees feel safe enough to talk about sensitive personal issues in the context of their workplace, even when the survey is anonymized.
 
 Some of the predictor variables include:
+
 - `tech_company`	Whether or not the respondent's employer is primarily a tech company/organization.
+
 - `benefits`	Whether or not the employer provides mental health benefits as part of healthcare coverage.
+
 - `medical_coverage` Whether or not respondents have medical coverage (private insurance or state-provided) that includes treatment of mental health disorders.
+
 - `workplace_resources`	Whether or not the employer offers resources to learn more about mental health disorders and options for seeking help.
+
 - `mh_employer_discussion`	Whether or not the respondent has ever discussed their mental health with the employer.
+
 - `mh_coworker_discussion` Whether or not the respondent has ever discussed their mental health with coworkers
+
 - `mh_share` The willingness of respondent to share mental health illness issues with friends and family, on a scale from 0 to 10.
+
+###
 
 ```{r import}
 osmi_raw <- read.csv(file = "osmi.csv")
 glimpse(osmi_raw)
-table(osmi$country)
 ```
 
 The data will be cleaned and transformed as follows:
+
 - some unclear or unsure responses are converted to `NA`s
+
 - character columns are converted to factors with no more than 3 levels
+
 - `country` column will be converted to "USA" or "Other" since the majority of respondents are from the US
 
-Also, as discussed above, since the goal is binary classification made on the `mental_health` column, the "Don't Know" value will be converted to "No" and the "Possibly" value will be interpreted as "Yes" (interpreted here as comfortable enough in their workplace to answer affirmatively).
+Also, as discussed above, since the goal is binary classification made on the `mental_health` column, the "Don't Know" value will be converted to "No" and the "Possibly" value will be converted to "Yes" (interpreted here as comfortable enough in their workplace to answer affirmatively).
 
 ```{r clean}
 osmi <- osmi_raw
@@ -73,9 +84,9 @@ head(osmi)
 
 ### Distributions
 
-The sole numeric feature of the mental health data in this set is the employees' "Willingness to share" mental health illness issues with friends and family. Here are the distributions by demographic data: `age`, `gender` and `country.` There are slightly higher frequencies of responses for workers in their 30s and with gender identity reported as 'other'.
+The sole numeric feature of the mental health-specific columns in this set is the employees' willingness to share mental health illness issues with friends and family. Here are the distributions by demographic data: `age`, `gender` and `country.` There are slightly higher frequencies of responses for workers in their 30s and with gender identity reported as 'other'.
 
-```{r demo, message=FALSE, warning=FALSE}
+```{r demo, echo=FALSE, message=FALSE, warning=FALSE}
 ggplot(osmi, aes(x = age, y = mh_share)) +
   geom_jitter() + 
   geom_smooth() +
@@ -89,9 +100,12 @@ ggplot(osmi, aes(x = country, y = mh_share)) +
   geom_boxplot() + 
   labs(y = "Willingness to share", x = "")
 ```
-The binary categorical variables representing company resources and culture are visualized below. There clear majorities in the data for companies that are in the tech industry and for employees having never discussed mental health with the employer, even though more employees reported "Yes" for having mental health issues.
 
-```{r bar}
+###
+
+The binary categorical variables representing company resources and culture are visualized below. There clear majorities in the data for companies that are in the tech industry and for employees having never discussed mental health with the employer, even though more employees overall reported "Yes" for mental health issues.
+
+```{r bar, echo=FALSE}
 ggplot(osmi, aes(x = tech_company)) +
   geom_bar() +
   labs(title = "Whether the respondent's employer is primarily a tech company", x = "", y = "")
@@ -109,36 +123,39 @@ ggplot(osmi, aes(x = mental_health)) +
   labs(title = "Whether respondent currently reports a mental health issue", x = "", y = "")
 ```
 
+
 # Algorithm Selection
 
 ## Support Vector Machines
 
-Since the dataset is relatively small with only 1242 observations, I have chosen to begin with SVMs because these models can be effective at avoiding overfitting during the training stage, which could be a concern for a decision tree or even ensembles of trees like XGBoost. Cross-validation can be applied to help further tune hyperparameters and increase accuracy and efficiency.
+Since the dataset is relatively small with only 1242 observations, I have chosen to begin with SVMs because these models can be effective at avoiding overfitting during the training stage, which could be a concern for a decision tree or even ensembles of trees like XGBoost. Cross-validation will be applied to help further tune hyperparameters and increase accuracy and efficiency.
 
 ## Neural Networks
 
-I have also selected a Multilayer Perceptron (MLP) aka a simple feedforward neural network because the goal is a simple binary classification task. Other types of neural networks tend to work well on larger datasets and complex problems like image processing, which could be overkill on this more focused task.
+I have also chosen to experiment with a simple feedforward neural network because the end-goal is just a binary classification. Other types of neural networks tend to work well on larger datasets and complex problems like image processing, which could be overkill on this more focused task.
 
 
 # Experimentation & Model Training
 
-The data is split for training and testing. The `NA`s are imputed using `na.roughfix` which replaces missing numeric values with medians and factor variables with the most frequent levels (breaking ties at random).
+The data is split for training and testing. Both types of algorithms require the `NA`s to be imputed, so I applied `na.roughfix` which replaces missing numeric values with medians and factor variables with the most frequent levels (breaking ties at random).
 
 ```{r split}
 set.seed(101)
 
 splitIndex <- createDataPartition(osmi$mental_health, p = 0.8, list = FALSE)
-
 osmi_train <- osmi[splitIndex,]
 osmi_test <- osmi[-splitIndex,]
 
 osmi_train <- na.roughfix(osmi_train)
 osmi_test <- na.roughfix(osmi_test)
 
+# breakdown of the response variable in each dataset
 round(prop.table(table(select(osmi, mental_health))), 2)
 round(prop.table(table(select(osmi_train, mental_health))), 2)
 round(prop.table(table(select(osmi_test, mental_health))), 2)
 ```
+
+A simple experiment log is initiated first for tracking.
 
 ```{r tracking}
 experiment_log <- data.frame(
@@ -159,7 +176,7 @@ experiment_log <- data.frame(
 
 Objective: Since SVMs generalize well on smaller datasets like this one, this can be a baseline for accuracy comparisons.
 
-Variations: This first model will use a linear kernel with the default cost (hardness/softness of margin) of 1. The missing values must be imputed, here using `na.roughfix`. The model has built-in scaling for the numeric columns to balance the features' contributions in determining the hyperplane.
+Variations: This first model will use a linear kernel with the default cost (hardness/softness of margin) of 1. The model has built-in scaling for the numeric columns to balance the features' contributions in determining the hyperplane.
       
 Evaluation: Generating the confusion matrix for accuracy.
 
@@ -168,6 +185,7 @@ Experiment:
 ```{r svm1-mod}
 set.seed(101)
 
+# vector of numeric columns for scaling
 num_cols <- sapply(osmi_train, is.numeric)
 
 svm1 <- svm(mental_health ~.,
@@ -175,7 +193,7 @@ svm1 <- svm(mental_health ~.,
             scale = num_cols,
             kernel = "linear")
 
-summary(svm1)
+print(svm1)
 ```
 
 ```{r svm1-eval}
@@ -189,9 +207,10 @@ svm1_test_pred <- predict(svm1, osmi_test)
 svm1_test_cm <- confusionMatrix(svm1_test_pred, osmi_test$mental_health)
 svm1_test_cm$overall["Accuracy"]
 ```
-Review: The accuracy for rates for training and testing indicate a decent performance; but improvement would be ideal.
 
-```{r svm1-log}
+Review: The accuracy for rates for training and testing indicate a decent performance, but improvement on this metric would be ideal. There are also 662 support vectors in this model to 994 observations in the training set, implying overfitting or noisy data.
+
+```{r svm1-log, include=FALSE}
 svm1_log <- data.frame(
   ID = 1,
   Model = "SVM",
@@ -199,7 +218,7 @@ svm1_log <- data.frame(
   Hyperparameters = "cost = 1",
   Train = 0.70,
   Test = 0.66,
-  Notes = "mediocre predictive accuracy"
+  Notes = "mediocre accuracy, too many support vectors"
 )
 
 experiment_log <- bind_rows(experiment_log, svm1_log)
@@ -208,24 +227,26 @@ experiment_log <- bind_rows(experiment_log, svm1_log)
 
 ### Experiment 2:
 
-Objective: Since the dataset is on the smaller side, the kernel will be adjusted to see if the accuracy can be increased.
+Objective: To see if we can improve on the accuracy and performance, the kernel will be updated.
 
-Variations: The kernel will be changed to the nonlinear RBF (Radial Basis Function), which is more flexible and able to read unclear patterns.
+Variations: The kernel will be changed to the nonlinear RBF (Radial Basis Function), which is more flexible and able to read unclear patterns; this may be helpful since the dataset is on the smaller side.
 
 Evaluation: Generating the confusion matrix for accuracy.
 
 Experiment:
 
 ```{r svm2-mod}
+set.seed(101)
+
 svm2 <- svm(mental_health ~.,
             data = osmi_train,
             scale = num_cols,
             kernel = "radial")
 
-summary(svm2)
+print(svm2)
 ```
 
-```{r svm1-eval}
+```{r svm2-eval}
 # predict and evaluate on training data
 svm2_train_pred <- predict(svm2, osmi_train)
 svm2_train_cm <- confusionMatrix(svm2_train_pred, osmi_train$mental_health)
@@ -237,9 +258,9 @@ svm2_test_cm <- confusionMatrix(svm2_test_pred, osmi_test$mental_health)
 svm2_test_cm$overall["Accuracy"]
 ```
 
-Review: The accuracy improved slightly, but with a larger difference between training and testing.
+Review: The accuracy improved slightly, but with a larger difference between training and testing. The number of support vectors also increased, so we are still overfitting on noise.
 
-```{r svm1-log}
+```{r svm2-log, include=FALSE}
 svm2_log <- data.frame(
   ID = 2,
   Model = "SVM",
@@ -247,7 +268,7 @@ svm2_log <- data.frame(
   Hyperparameters = "kernel = radial",
   Train = 0.74,
   Test = 0.68,
-  Notes = "slight improvement and overfitting"
+  Notes = "slightly higher accuracy, overfitting"
 )
 
 experiment_log <- bind_rows(experiment_log, svm2_log)
@@ -265,18 +286,21 @@ Evaluation: Generating the confusion matrix for accuracy.
 Experiment:
 
 ```{r svm-tune}
+set.seed(101)
+
 tune_mod <- tune(svm,
                  mental_health ~.,
                  data = osmi_train,
                  kernel = "radial",
                  ranges = list(cost = c(0.01, 0.1, 1, 10), gamma = c(0.001, 0.025, 0.1, 1)))
 
-summary(tune_mod)
+print(tune_mod)
+
+best_mod <- tune_mod$best.model
+print(best_mod)
 ```
 
 ```{r tune-eval}
-best_mod <- tune_mod$best.model
-
 # predict and evaluate on training data
 best_train_pred <- predict(best_mod, osmi_train)
 best_train_cm <- confusionMatrix(best_train_pred, osmi_train$mental_health)
@@ -290,9 +314,9 @@ best_test_cm$overall["Accuracy"]
 
 Review: The hyperparameter tuning determined that the best model raised the `gamma` to 0.1, which reduced the effect of points further from the decision boundary; as expected, this resulted in the model overfitting on training data. 
 
-The performance of SVM on this dataset has been passable, but there may be better algorithms to try.
+The number of support vectors remains too high. Overall, I would say the performance of SVMs on this small dataset has been merely passable.
 
-```{r svm3-log}
+```{r svm3-log, include=FALSE}
 svm3_log <- data.frame(
   ID = 3,
   Model = "SVM",
@@ -300,7 +324,7 @@ svm3_log <- data.frame(
   Hyperparameters = "tuned to best gamma 0.1",
   Train = 0.72,
   Test = 0.65,
-  Notes = "modest increase in overfitting"
+  Notes = "more overfitting, no improvement elsewhere"
 )
 
 experiment_log <- bind_rows(experiment_log, svm3_log)
@@ -314,20 +338,26 @@ experiment_log <- bind_rows(experiment_log, svm3_log)
 Objective: We will test whether a simple neural network can predict more effectively and accurately on this dataset than SVM.
 
 Variations: 
-- In a simple neural network, features must be hand-selected for the formula. A simple `randomForest` can rank importance using `MeanDecreaseGini` aka the reduction in impurity (business logic could be applied instead, but a RF was more reproducible). The top 5 features will be used.
+
+- In a neural network, features must be hand-selected for the formula. A simple `randomForest` model can quickly rank importance using `MeanDecreaseGini` (aka the reduction in impurity) and the top 5 features will be selected.
+
 - Factor columns must be converted to dummy variables (one-hot encoded), then converted back for interpretation.
-- The neural network will have 2 hidden layers, the first layer with 3 neurons and the second with 2.
-      
+
+- The first neural network will have 2 hidden layers, the first layer with 3 neurons and the second with 2 (also arbitrarily chosen / default values).
+
 Evaluation: Generating the confusion matrix for accuracy.
 
 Experiment:
 
 ```{r features}
+set.seed(101)
+
 rf <- randomForest(mental_health ~ ., data = osmi_train)
 importance(rf)
 ```
 
 ```{r nn1-scale1h}
+# scale and one-hot encode
 otrain_scaled <- osmi_train
 otrain_scaled[num_cols] <- scale(otrain_scaled[num_cols])
 mh_1h_train <- ifelse(otrain_scaled$mental_health == "Yes", 1, 0)
@@ -342,11 +372,11 @@ otest_scaled <- cbind(mental_health = mh_1h_test, otest_scaled)
 ```
 
 ```{r nn1-mod}
+set.seed(101)
+
 nn1 <- neuralnet(mental_health ~ age + mh_share + mh_coworker_discussionYes + mh_employer_discussionYes + countryUSA,
                  data = otrain_scaled,
                  hidden = c(3, 2))
-
-summary(nn1)
 
 plot(nn1, rep = "best")
 ```
@@ -355,10 +385,10 @@ plot(nn1, rep = "best")
 # predict and evaluate on training data
 nn1_train_pred <- predict(nn1, otrain_scaled)
 
-# convert probabilities back to binary yes/no at threshold = 0.5,
+# convert probabilities yes/no strings at threshold = 0.5,
 nn1_train_pred_factor <- ifelse(nn1_train_pred > 0.5, "Yes", "No")
 
-# then back to factors for the confusion matrix
+# convert back to factors for the confusion matrix
 nn1_train_pred_factor <- factor(nn1_train_pred_factor, levels = c("No", "Yes"))
 nn1_train_cm <- confusionMatrix(nn1_train_pred_factor, osmi_train$mental_health, positive = "Yes")
 nn1_train_cm$overall["Accuracy"]
@@ -371,16 +401,16 @@ nn1_test_cm <- confusionMatrix(nn1_test_pred_factor, osmi_test$mental_health, po
 nn1_test_cm$overall["Accuracy"]
 ```
 
-Review: 
+Review: The accuracy is essentially the same as the SVMs, with some signs of overfitting.
 
-```{r nn1-log}
+```{r nn1-log, include=FALSE}
 nn1_log <- data.frame(
   ID = 4,
   Model = "Simple Neural Net",
   Features = "Top 5 based on RF",
-  Hyperparameters = "",
+  Hyperparameters = "hidden layers: 3 nodes -> 2 nodes",
   Train = 0.72,
-  Test = 0.65,
+  Test = 0.66,
   Notes = "similar results to SVM"
 )
 
@@ -390,41 +420,119 @@ experiment_log <- bind_rows(experiment_log, nn1_log)
 
 ### Experiment 5:
 
-Objective: Refocus on changes: select features dealing solely with company data
+Objective: In this next test, I want to refocus on the business problem and select only tech companies and features dealing solely with company resource data.
 
-Variations: Feature selection:
+Variations: We will test using only the variables that employers can affect: `tech_company`, `benefits`, `workplace_resources`, `medical_coverage` and `mh_employer_discussion`.
       
 Evaluation: Generating the confusion matrix for accuracy.
 
+```{r nn2-mod}
+set.seed(101)
 
+nn2 <- neuralnet(
+  mental_health ~ tech_companyYes + benefitsYes + workplace_resourcesYes + medical_coverageYes + mh_employer_discussionYes,
+  data = otrain_scaled,
+  hidden = c(3, 2))
 
+plot(nn2, rep = "best")
+```
 
+```{r nn2-eval}
+# predict and evaluate on training data
+nn2_train_pred <- predict(nn2, otrain_scaled)
+nn2_train_pred_factor <- ifelse(nn2_train_pred > 0.5, "Yes", "No")
+nn2_train_pred_factor <- factor(nn2_train_pred_factor, levels = c("No", "Yes"))
+nn2_train_cm <- confusionMatrix(nn2_train_pred_factor, osmi_train$mental_health, positive = "Yes")
+nn2_train_cm$overall["Accuracy"]
 
+# predict and evaluate on testing data
+nn2_test_pred <- predict(nn2, otest_scaled)
+nn2_test_pred_factor <- ifelse(nn2_test_pred > 0.5, "Yes", "No")
+nn2_test_pred_factor <- factor(nn2_test_pred_factor, levels = c("No", "Yes"))
+nn2_test_cm <- confusionMatrix(nn2_test_pred_factor, osmi_test$mental_health, positive = "Yes")
+nn2_test_cm$overall["Accuracy"]
+```
 
+Review: As expected, selecting the features of lower importance per the RF resulted in a drop in accuracy, and the sum of squared errors increased from the first model's 89.9 to 103.4. However, the overfitting has been mitigated. 
+
+```{r nn2-log, include=FALSE}
+nn2_log <- data.frame(
+  ID = 5,
+  Model = "Simple Neural Net",
+  Features = "Employer features only",
+  Hyperparameters = "same number of layer/nodes",
+  Train = 0.65,
+  Test = 0.65,
+  Notes = "less accurate, no overfitting"
+)
+
+experiment_log <- bind_rows(experiment_log, nn2_log)
+```
 
 ### Experiment 6
 
-Objective: 
+Objective: For the final experiment, the hyperparameters of the neural network will be tuned to see if accuracy can be enhanced and errors reduced.
 
+Variations: The number of hidden layers and the number of neurons in each layer will be increased.
 
+Evaluation: Generating the confusion matrix for accuracy.
 
 Experiment:
 
+```{r nn3-mod}
+set.seed(101)
+
+nn3 <- neuralnet(
+  mental_health ~ tech_companyYes + benefitsYes + workplace_resourcesYes + medical_coverageYes + mh_employer_discussionYes,
+  data = otrain_scaled,
+  hidden = c(5, 4, 3, 2))
+
+plot(nn3, rep = "best")
+```
+
+```{r nn3-eval}
+# predict and evaluate on training data
+nn3_train_pred <- predict(nn3, otrain_scaled)
+nn3_train_pred_factor <- ifelse(nn3_train_pred > 0.5, "Yes", "No")
+nn3_train_pred_factor <- factor(nn3_train_pred_factor, levels = c("No", "Yes"))
+nn3_train_cm <- confusionMatrix(nn3_train_pred_factor, osmi_train$mental_health, positive = "Yes")
+nn3_train_cm$overall["Accuracy"]
+
+# predict and evaluate on testing data
+nn3_test_pred <- predict(nn3, otest_scaled)
+nn3_test_pred_factor <- ifelse(nn3_test_pred > 0.5, "Yes", "No")
+nn3_test_pred_factor <- factor(nn3_test_pred_factor, levels = c("No", "Yes"))
+nn3_test_cm <- confusionMatrix(nn3_test_pred_factor, osmi_test$mental_health, positive = "Yes")
+nn3_test_cm$overall["Accuracy"]
+```
+
+Review: The accuracy and SSE values appear virtually unchanged.
+
+```{r nn3-log, include=FALSE}
+nn3_log <- data.frame(
+  ID = 6,
+  Model = "Simple Neural Net",
+  Features = "Employer features only",
+  Hyperparameters = "hidden layers: 5 nodes -> 4 -> 3 -> 2",
+  Train = 0.65,
+  Test = 0.65,
+  Notes = "same accuracy and SSE"
+)
+
+experiment_log <- bind_rows(experiment_log, nn3_log)
+```
 
 
+# Results, Comparison & Conclusions
 
+\tiny 
+```{r conclusion, echo=FALSE}
+knitr::kable(experiment_log, format = "pipe", padding = 0)
+```
+\normalsize
 
+In the above machine learning experiments, all the models achieved pretty similar accuracy levels, ranging from about 65% to 74%. My conclusion is that any further tuning and testing based on this dataset will likely be of little significance. Despite the differences in model complexities and hyperparameter adjustments, the similar accuracy and error rates across all tests and data subsets suggests that the structure and content of the original data itself might be limiting increases to the predictive performance.
 
+SVMs reached 74% on training, a decent performance after tuning the kernel from linear to radial, but predictions made on testing sets suggested the model tended to overfit on the training step. The simple Neural Networks with the most relevant features selected did manage to mitigate any overfitting but at the expense of overall accuracy.
 
-
-
-# Results & Comparison 
-
-Make your conclusions from your analysis.
-Conclusions - with business impact	
-1. Comparison of results (10)
-2. Business impact included (10)
-
-Deliverable:
-The traditional R file
-An Essay (minimum 500 word document), incl Summary with business impact
+The overall performance of our models implies only modest predictive confidence in identifying patterns in the support for mental health of tech workers. Insights drawn from these experiments should be considered as only one piece in the much larger puzzle of companies' support for their employees. Continuing to improve and expand on the available data regarding tech employees' mental health and wellness would be the most beneficial step toward usable predictive modeling in this area.
